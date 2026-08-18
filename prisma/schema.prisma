@@ -1,0 +1,137 @@
+// Prisma schema for the neptune loan manager.
+// Default datasource is SQLite for zero-config local dev — swap the
+// provider/url (via DATABASE_URL) for Postgres/MySQL in production.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(cuid())
+  name            String
+  email           String    @unique
+  passwordHash    String
+  role            String    @default("BORROWER") // "BORROWER" | "ADMIN"
+  isBlocked       Boolean   @default(false)
+  emailVerified   Boolean   @default(false)
+  phone           String?
+  mailingAddress  String?
+
+  paperlessBilling      Boolean @default(true)
+  remindPaymentDue      Boolean @default(true)
+  notifyPaymentPosted   Boolean @default(true)
+  notifySecurityAlerts  Boolean @default(true)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  loans           LoanAccount[]
+  clickEvents     ClickEvent[]
+  otpCodes        OtpCode[]
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  code      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model LoanAccount {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  nickname          String   // e.g. "Auto Loan — 2023"
+  accountNumber     String   // full account number, masked on display
+  status            String   @default("Current")
+
+  originalAmount    Float
+  interestRate      Float    // APR, e.g. 6.49
+  termMonths        Int
+  originationDate   DateTime
+  maturityDate      DateTime
+  monthlyPayment    Float
+
+  principal         Float
+  accruedInterest   Float    @default(0)
+  lateFees          Float    @default(0)
+  escrow            Float    @default(0)
+
+  ytdInterestPaid   Float    @default(0)
+  ytdPrincipalPaid  Float    @default(0)
+  dailyInterestRate Float    @default(0)
+
+  createdAt         DateTime @default(now())
+
+  transactions      Transaction[]
+  payments          Payment[]
+  documents         Document[]
+}
+
+model Transaction {
+  id          String      @id @default(cuid())
+  loanId      String
+  loan        LoanAccount @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  type        String      // "payment" | "disbursement" | "fee_waived" | ...
+  label       String
+  reference   String?
+  amount      Float       // negative = money out of balance, positive = credit
+  date        DateTime
+
+  createdAt   DateTime    @default(now())
+}
+
+model Payment {
+  id          String      @id @default(cuid())
+  loanId      String
+  loan        LoanAccount @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  method      String
+  allocation  String      // "standard" | "principal_only" | "custom"
+  amount      Float
+  scheduledAt DateTime
+  status      String      @default("scheduled")
+
+  createdAt   DateTime    @default(now())
+}
+
+model Document {
+  id          String      @id @default(cuid())
+  loanId      String
+  loan        LoanAccount @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  title       String
+  category    String      // "Statement" | "Tax Form" | "Contract" | "Modification"
+  periodLabel String?
+  date        DateTime
+}
+
+// ---------------------------------------------------------------------------
+// Every button click (and other tracked UI interactions) gets logged here
+// by the /api/events route. See components/ClickTracker.tsx.
+// ---------------------------------------------------------------------------
+model ClickEvent {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  sessionId  String
+  label      String   // visible text / data-track-label of the element
+  elementId  String?  // DOM id, if present
+  path       String   // page pathname the click happened on
+  metadata   String?  // JSON-encoded extra context
+
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}

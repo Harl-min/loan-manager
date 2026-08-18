@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fallback values — overridden at runtime by the inline <style> tag that
+   app/layout.tsx renders from lib/brand.ts, so a brand swap never requires
+   touching this file or rebuilding Tailwind. */
+:root {
+  --color-background: 255 255 255;
+  --color-surface: 255 255 255;
+  --color-border: 228 228 231;
+  --color-muted: 113 113 122;
+  --color-foreground: 24 24 27;
+  --color-primary: 17 17 17;
+  --color-primary-foreground: 255 255 255;
+  --color-accent: 16 185 129;
+  --color-accent-foreground: 255 255 255;
+  --color-success: 16 185 129;
+  --color-warning: 217 119 6;
+  --color-danger: 220 38 38;
+  --radius: 0.75rem;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  background-color: rgb(var(--color-background));
+  color: rgb(var(--color-foreground));
+  font-family: var(--font-sans);
+}
+
+/* Minimal toggle-switch look used on the Settings page, built with plain
+   CSS rather than a component library so it stays easy to re-theme. */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch .track {
+  position: absolute; inset: 0; cursor: pointer;
+  background-color: rgb(var(--color-border));
+  border-radius: 999px;
+  transition: background-color 0.15s ease;
+}
+.switch .track::before {
+  content: ""; position: absolute; height: 16px; width: 16px; left: 3px; top: 3px;
+  background-color: white; border-radius: 50%; transition: transform 0.15s ease;
+}
+.switch input:checked + .track {
+  background-color: rgb(var(--color-primary));
+}
+.switch input:checked + .track::before {
+  transform: translateX(18px);
+}
