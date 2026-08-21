@@ -41,7 +41,7 @@ export default function AmortizationSchedule({
 
   return (
     <Card className="p-0">
-      <div className="border-b border-border p-6">
+      {/* <div className="border-b border-border p-6">
         <h3 className="font-semibold text-foreground">&quot;What-If&quot; Calculator</h3>
         <label className="mt-3 block text-sm font-medium text-foreground">Extra monthly payment</label>
         <div className="relative mt-1.5 w-40">
@@ -54,7 +54,7 @@ export default function AmortizationSchedule({
             className="w-full rounded-brand border border-border py-2 pl-7 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>
-      </div>
+      </div> */}
 
       <div className="max-h-96 overflow-y-auto">
         <table className="w-full text-sm">

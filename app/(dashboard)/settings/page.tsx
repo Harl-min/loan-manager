@@ -12,7 +12,6 @@ type Profile = {
   phone: string | null;
   mailingAddress: string | null;
   emailVerified: boolean;
-  paperlessBilling: boolean;
   remindPaymentDue: boolean;
   notifyPaymentPosted: boolean;
   notifySecurityAlerts: boolean;
@@ -46,7 +45,6 @@ export default function SettingsPage() {
     if (!profile) return;
     setSaving("prefs");
     await api.patch("/profile", {
-      paperlessBilling: profile.paperlessBilling,
       remindPaymentDue: profile.remindPaymentDue,
       notifyPaymentPosted: profile.notifyPaymentPosted,
       notifySecurityAlerts: profile.notifySecurityAlerts,
@@ -94,16 +92,6 @@ export default function SettingsPage() {
         </Button>
       </Card>
 
-      <Card className="mt-6">
-        <h2 className="font-semibold text-foreground">Communication</h2>
-        <Toggle
-          className="mt-4"
-          label="Paperless billing"
-          description="Receive statements electronically instead of by mail."
-          checked={profile.paperlessBilling}
-          onChange={(v) => setProfile({ ...profile, paperlessBilling: v })}
-        />
-      </Card>
 
       <Card className="mt-6">
         <h2 className="font-semibold text-foreground">Alerts & Notifications</h2>

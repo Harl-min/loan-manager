@@ -30,7 +30,7 @@ async function handleSubmit(e: React.FormEvent) {
 
     setLoading(false);
 
-    if (res?.error === "EMAIL_NOT_VERIFIED") {
+ if (res?.error === "EMAIL_NOT_VERIFIED") {
       router.push(`/verify-email?email=${encodeURIComponent(email)}`);
       return;
     }
@@ -54,8 +54,13 @@ async function handleSubmit(e: React.FormEvent) {
         <div className="mx-auto mb-4 flex items-center justify-center ">
           <Image src={brand.logo} alt="Logo" width={140} height={40} />
         </div>
-        <h1 className="text-2xl font-bold text-foreground">Welcome back</h1>
-        <p className="mt-1 text-sm text-muted">Log in to your account</p>
+      <h1 className="text-2xl font-bold text-foreground">
+  Welcome to Loan Manager
+</h1>
+
+<p className="mt-1 text-sm text-muted">
+  Sign in to access your loan management dashboard.
+</p>
       </div>
 
       <Card>
@@ -79,7 +84,7 @@ async function handleSubmit(e: React.FormEvent) {
             id="email"
             type="email"
             label="Email"
-            placeholder="you@example.com"
+            placeholder="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required

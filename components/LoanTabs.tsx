@@ -6,10 +6,10 @@ import { clsx } from "@/lib/clsx";
 
 const tabs = [
   { key: "overview", label: "Overview" },
-  { key: "payment", label: "Make a Payment" },
+  // { key: "payment", label: "Make a Payment" },
   { key: "transactions", label: "Transactions" },
   { key: "schedule", label: "Schedule" },
-  { key: "documents", label: "Documents" },
+  // { key: "documents", label: "Documents" },
 ];
 
 export default function LoanTabs({ loanId }: { loanId: string }) {

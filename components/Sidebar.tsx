@@ -8,7 +8,7 @@ import { brand } from "@/lib/brand";
 import Image from "next/image";
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/calculator", label: "Loan Calculator" },
+  // { href: "/calculator", label: "Loan Calculator" },
   { href: "/settings", label: "Profile & Settings" },
 ];
 
@@ -26,7 +26,7 @@ export default function Sidebar() {
           <div>
             {/* <div className="text-sm font-semibold leading-tight text-foreground">{brand.name}</div> */}
 
-            <div className="text-xs leading-tight text-muted">
+            <div className="text-xs font-bold leading-tight text-muted">
               {brand.tagline}
             </div>
           </div>

@@ -33,7 +33,10 @@ export async function POST(req: NextRequest) {
 
   const parsed = bodySchema.safeParse(payload);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid event payload" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid event payload" },
+      { status: 400 },
+    );
   }
 
   const session = await getServerSession(authOptions);
@@ -57,14 +60,34 @@ export async function POST(req: NextRequest) {
 /** Lightweight read endpoint — handy for an admin activity view. Admin-only. */
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
+
   if ((session?.user as any)?.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const userId = req.nextUrl.searchParams.get("userId");
+
   const events = await prisma.clickEvent.findMany({
-    orderBy: { createdAt: "desc" },
+    where: userId
+      ? {
+          userId,
+        }
+      : undefined,
+
+    orderBy: {
+      createdAt: "desc",
+    },
+
     take: 100,
-    include: { user: { select: { name: true, email: true } } },
+
+    include: {
+      user: {
+        select: {
+          name: true,
+          email: true,
+        },
+      },
+    },
   });
 
   return NextResponse.json({ events });

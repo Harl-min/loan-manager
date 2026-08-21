@@ -24,7 +24,7 @@ export default function AdminSidebar() {
           </div>
           <div>
             {/* <div className="text-sm font-semibold leading-tight text-foreground">{brand.name}</div> */}
-            <div className="text-xs leading-tight text-muted">
+            <div className="text-xs font-bold leading-tight text-muted">
               Admin Console
             </div>
           </div>
@@ -60,17 +60,18 @@ export default function AdminSidebar() {
           <div className="truncate text-xs text-muted">
             {session?.user?.email}
           </div>
-          <span className="mt-1 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-            ADMIN
+          <span className="mt-1 flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary w-fit">
+          <div className="h-2 w-2 bg-green-600 rounded-full"></div>
+             ADMIN
           </span>
         </div>
-        <Link
+        {/* <Link
           href="/dashboard"
           data-track-label="Switch to borrower view"
           className="block w-full rounded-brand px-3 py-2 text-left text-sm font-medium text-muted hover:bg-muted/10 hover:text-foreground"
         >
           Borrower view
-        </Link>
+        </Link> */}
         <button
           data-track-label="Sign out"
           onClick={() => signOut({ callbackUrl: "/login" })}

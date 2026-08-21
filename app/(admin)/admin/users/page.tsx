@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -17,48 +17,354 @@ type AdminUser = {
   isBlocked: boolean;
   emailVerified: boolean;
   phone: string | null;
+  mailingAddress?: string | null;
   createdAt: string;
-  _count: { loans: number };
+  _count: {
+    loans: number;
+  };
 };
+
+type SortKey = "name" | "email" | "role" | "loans" | "status" | "createdAt";
+
+type SortDirection = "asc" | "desc";
+type RoleFilter = "ALL" | "BORROWER" | "ADMIN";
+
+type UserStatus = "active" | "inactive" | "blocked";
+
+const PAGE_SIZE = 10;
 
 export default function ManageUsersPage() {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
+
   const [query, setQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"ALL" | "BORROWER" | "ADMIN">("ALL");
-  const [showCreate, setShowCreate] = useState(false);
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("ALL");
+
+  const [sortKey, setSortKey] = useState<SortKey>("createdAt");
+
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+
+  const [currentPage, setCurrentPage] = useState(1);
+
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function load() {
-    const params = new URLSearchParams();
-    if (roleFilter !== "ALL") params.set("role", roleFilter);
-    if (query) params.set("q", query);
-    const res = await api.get<{ users: AdminUser[] }>(`/admin/users?${params.toString()}`);
-    setUsers(res.users);
-  }
+  // Create user modal
+  const [showCreateUser, setShowCreateUser] = useState(false);
+
+  const [creatingUser, setCreatingUser] = useState(false);
+
+  const [createError, setCreateError] = useState("");
+
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "BORROWER" as "BORROWER" | "ADMIN",
+    phone: "",
+    mailingAddress: "",
+  });
+
+  /*
+   * ------------------------------------------------------------
+   * LOAD USERS
+   * ------------------------------------------------------------
+   */
+
+  const loadUsers = () => {
+    api
+      .get<{ users: AdminUser[] }>("/admin/users")
+      .then((r) => setUsers(r.users))
+      .catch(() => setUsers([]));
+  };
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roleFilter]);
+    loadUsers();
+  }, []);
 
-  async function toggleBlock(u: AdminUser) {
-    setBusyId(u.id);
+  /*
+   * ------------------------------------------------------------
+   * USER STATUS
+   *
+   * Blocked always takes priority.
+   *
+   * blocked
+   *    ↓
+   * BLOCKED
+   *
+   * otherwise:
+   *
+   * loans === 0
+   *    ↓
+   * INACTIVE
+   *
+   * loans > 0
+   *    ↓
+   * ACTIVE
+   * ------------------------------------------------------------
+   */
+
+  const getUserStatus = (user: AdminUser): UserStatus => {
+    if (user.isBlocked) {
+      return "blocked";
+    }
+
+    if (user._count.loans === 0) {
+      return "inactive";
+    }
+
+    return "active";
+  };
+
+  /*
+   * ------------------------------------------------------------
+   * SEARCH + ROLE FILTER
+   * ------------------------------------------------------------
+   */
+
+  const filteredUsers = useMemo(() => {
+    if (!users) return [];
+
+    const search = query.trim().toLowerCase();
+
+    return users.filter((user) => {
+      const matchesSearch =
+        !search ||
+        user.name.toLowerCase().includes(search) ||
+        user.email.toLowerCase().includes(search);
+
+      const matchesRole = roleFilter === "ALL" || user.role === roleFilter;
+
+      return matchesSearch && matchesRole;
+    });
+  }, [users, query, roleFilter]);
+
+  /*
+   * ------------------------------------------------------------
+   * SORT
+   * ------------------------------------------------------------
+   */
+
+  const sortedUsers = useMemo(() => {
+    return [...filteredUsers].sort((a, b) => {
+      let valueA: string | number;
+      let valueB: string | number;
+
+      switch (sortKey) {
+        case "name":
+          valueA = a.name;
+          valueB = b.name;
+          break;
+
+        case "email":
+          valueA = a.email;
+          valueB = b.email;
+          break;
+
+        case "role":
+          valueA = a.role;
+          valueB = b.role;
+          break;
+
+        case "loans":
+          valueA = a._count.loans;
+          valueB = b._count.loans;
+          break;
+
+        case "status":
+          valueA = getUserStatus(a);
+          valueB = getUserStatus(b);
+          break;
+
+        case "createdAt":
+          valueA = new Date(a.createdAt).getTime();
+          valueB = new Date(b.createdAt).getTime();
+          break;
+      }
+
+      let comparison: number;
+
+      if (typeof valueA === "number" && typeof valueB === "number") {
+        comparison = valueA - valueB;
+      } else {
+        comparison = String(valueA).localeCompare(String(valueB));
+      }
+
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+  }, [filteredUsers, sortKey, sortDirection]);
+
+  /*
+   * ------------------------------------------------------------
+   * PAGINATION
+   * ------------------------------------------------------------
+   */
+
+  const totalPages = Math.ceil(sortedUsers.length / PAGE_SIZE);
+
+  const paginatedUsers = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+
+    return sortedUsers.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [sortedUsers, currentPage]);
+
+  /*
+   * ------------------------------------------------------------
+   * SORT HANDLER
+   * ------------------------------------------------------------
+   */
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+
+      setSortDirection(key === "createdAt" ? "desc" : "asc");
+    }
+
+    setCurrentPage(1);
+  };
+
+  /*
+   * ------------------------------------------------------------
+   * SORT ARROW
+   * ------------------------------------------------------------
+   */
+
+  const getSortArrow = (key: SortKey) => {
+    if (sortKey !== key) {
+      return "↕";
+    }
+
+    return sortDirection === "asc" ? "↑" : "↓";
+  };
+
+  /*
+   * ------------------------------------------------------------
+   * SORT HEADER
+   * ------------------------------------------------------------
+   */
+
+  const renderSortHeader = (label: string, key: SortKey, width: string) => (
+    <th className={`${width} px-6 py-3 text-left font-medium`}>
+      <button
+        type="button"
+        onClick={() => handleSort(key)}
+        className="inline-flex items-center gap-2 transition-opacity hover:opacity-70"
+      >
+        <span>{label}</span>
+
+        <span className="text-[11px]">{getSortArrow(key)}</span>
+      </button>
+    </th>
+  );
+
+  /*
+   * ------------------------------------------------------------
+   * CREATE USER FORM
+   * ------------------------------------------------------------
+   */
+
+  const handleCreateUser = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    setCreateError("");
+    setCreatingUser(true);
+
     try {
-      await api.patch(`/admin/users/${u.id}`, { isBlocked: !u.isBlocked });
-      await load();
+      await api.post("/admin/users", {
+        name: createForm.name,
+        email: createForm.email,
+        password: createForm.password,
+        role: createForm.role,
+        phone: createForm.phone || undefined,
+        mailingAddress: createForm.mailingAddress || undefined,
+      });
+
+      // Reset form
+      setCreateForm({
+        name: "",
+        email: "",
+        password: "",
+        role: "BORROWER",
+        phone: "",
+        mailingAddress: "",
+      });
+
+      setShowCreateUser(false);
+
+      // Refresh table
+      loadUsers();
+
+      // Start from first page
+      setCurrentPage(1);
+    } catch (error: any) {
+      setCreateError(
+        error?.message ?? "Unable to create user. Please try again.",
+      );
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
+  /*
+   * ------------------------------------------------------------
+   * BLOCK / UNBLOCK
+   * ------------------------------------------------------------
+   */
+
+  const toggleBlock = async (user: AdminUser) => {
+    setBusyId(user.id);
+
+    try {
+      await api.patch(`/admin/users/${user.id}`, {
+        isBlocked: !user.isBlocked,
+      });
+
+      loadUsers();
+    } catch (error) {
+      console.error("Failed to update blocked status", error);
     } finally {
       setBusyId(null);
     }
-  }
+  };
+
+  /*
+   * ------------------------------------------------------------
+   * ACTIVATE
+   * ------------------------------------------------------------
+   */
+
+  const activateUser = async (user: AdminUser) => {
+    setBusyId(user.id);
+
+    try {
+      await api.patch(`/admin/users/${user.id}`, {
+        emailVerified: true,
+      });
+
+      loadUsers();
+    } catch (error) {
+      console.error("Failed to activate user", error);
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <div>
+      {/* ========================================================
+          HEADER
+      ======================================================== */}
+
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Manage Users</h1>
-          <p className="mt-1 text-sm text-muted">Create, modify, block, or unblock user accounts.</p>
+
+          <p className="mt-1 text-sm text-muted">
+            Search and manage customer accounts.
+          </p>
         </div>
-        <Button trackLabel="Create user" onClick={() => setShowCreate(true)}>
+        <Button trackLabel="Create user" onClick={() => setShowCreateUser(true)}>
           + Create User
         </Button>
       </div>
@@ -67,7 +373,7 @@ export default function ManageUsersPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            load();
+            loadUsers();
           }}
           className="flex-1"
         >
@@ -101,82 +407,231 @@ export default function ManageUsersPage() {
         <table className="w-full text-sm">
           <thead className="text-xs text-muted">
             <tr>
-              <th className="px-6 py-3 text-left font-medium">Name</th>
-              <th className="px-6 py-3 text-left font-medium">Email</th>
-              <th className="px-6 py-3 text-left font-medium">Role</th>
-              <th className="px-6 py-3 text-left font-medium">Loans</th>
-              <th className="px-6 py-3 text-left font-medium">Status</th>
-              <th className="px-6 py-3 text-left font-medium">Joined</th>
-              <th className="px-6 py-3 text-right font-medium">Actions</th>
+              {renderSortHeader("Name", "name", "w-[17%]")}
+
+              {renderSortHeader("Email", "email", "w-[21%]")}
+
+              {renderSortHeader("Role", "role", "w-[11%]")}
+
+              {renderSortHeader("Loans", "loans", "w-[9%]")}
+
+              {renderSortHeader("Status", "status", "w-[12%]")}
+
+              {renderSortHeader("Joined", "createdAt", "w-[13%]")}
+
+              <th className="w-[17%] px-6 py-3 text-right font-medium">
+                Actions
+              </th>
             </tr>
           </thead>
+
           <tbody>
-            {users?.map((u) => (
-              <tr key={u.id} className="border-t border-border">
-                <td className="px-6 py-3">
+            {paginatedUsers.map((user) => {
+              const status = getUserStatus(user);
+
+              return (
+                <tr key={user.id} className="border-t border-border">
+        <td className="px-6 py-3">
                   <Link
-                    href={`/admin/users/${u.id}`}
-                    data-track-label={`View user:${u.name}`}
+                    href={`/admin/users/${user.id}`}
+                    data-track-label={`View user:${user.name}`}
                     className="font-medium text-foreground hover:underline"
                   >
-                    {u.name}
+                    {user.name}
                   </Link>
                 </td>
-                <td className="px-6 py-3 text-muted">{u.email}</td>
-                <td className="px-6 py-3">
-                  <span className="rounded-full bg-muted/10 px-2 py-0.5 text-xs font-medium text-foreground">
-                    {u.role}
-                  </span>
-                </td>
-                <td className="px-6 py-3 text-muted">{u._count.loans}</td>
-                <td className="px-6 py-3">
-                  <span
-                    className={clsx(
-                      "rounded-full px-2 py-0.5 text-xs font-medium",
-                      u.isBlocked ? "bg-danger/10 text-danger" : "bg-success/10 text-success"
-                    )}
-                  >
-                    {u.isBlocked ? "Blocked" : "Active"}
-                  </span>
-                </td>
-                <td className="px-6 py-3 text-muted">{fmtDate(u.createdAt)}</td>
-                <td className="px-6 py-3 text-right">
-                  <div className="flex justify-end gap-2">
-                    <Link href={`/admin/users/${u.id}`}>
-                      <Button variant="secondary" size="sm" trackLabel={`Edit user:${u.name}`}>
-                        Edit
-                      </Button>
-                    </Link>
-                    <Button
-                      variant={u.isBlocked ? "secondary" : "outline"}
-                      size="sm"
-                      disabled={busyId === u.id}
-                      trackLabel={u.isBlocked ? `Unblock:${u.name}` : `Block:${u.name}`}
-                      onClick={() => toggleBlock(u)}
+                  {/* EMAIL */}
+
+                  <td className="break-all px-6 py-3 text-muted">
+                    {user.email}
+                  </td>
+
+                  {/* ROLE */}
+
+                  <td className="px-6 py-3 text-muted">
+                    {user.role === "BORROWER" ? "Borrower" : "Admin"}
+                  </td>
+
+                  {/* LOANS */}
+
+                  <td className="px-6 py-3 text-muted">{user._count.loans}</td>
+
+                  {/* STATUS */}
+
+                  <td className="px-6 py-3">
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                        status === "blocked"
+                          ? "bg-danger/10 text-danger"
+                          : status === "inactive"
+                            ? "bg-warning/10 text-warning"
+                            : "bg-success/10 text-success"
+                      }`}
                     >
-                      {u.isBlocked ? "Unblock" : "Block"}
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {users?.length === 0 && (
+                      {status === "blocked"
+                        ? "Blocked"
+                        : status === "inactive"
+                          ? "Inactive"
+                          : "Active"}
+                    </span>
+                  </td>
+
+                  {/* JOINED */}
+
+                  <td className="whitespace-nowrap px-6 py-3 text-muted">
+                    {fmtDate(user.createdAt)}
+                  </td>
+
+                  {/* ACTIONS */}
+
+                  <td className="px-6 py-3">
+                    <div className="flex justify-end gap-2">
+                      {/* EDIT */}
+
+                      <Link href={`/admin/users/${user.id}`}>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          trackLabel={`Edit user:${user.name}`}
+                        >
+                          Edit
+                        </Button>
+                      </Link>
+
+                      {/* BLOCKED → UNBLOCK */}
+
+                      {status === "blocked" && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={busyId === user.id}
+                          trackLabel={`Unblock:${user.name}`}
+                          onClick={() => toggleBlock(user)}
+                        >
+                          {busyId === user.id ? "Unblocking..." : "Unblock"}
+                        </Button>
+                      )}
+
+                      {/* INACTIVE → ACTIVATE */}
+
+                      {status === "inactive" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busyId === user.id}
+                          trackLabel={`Activate:${user.name}`}
+                          onClick={() => activateUser(user)}
+                        >
+                          {busyId === user.id ? "Activating..." : "Activate"}
+                        </Button>
+                      )}
+
+                      {/* ACTIVE → BLOCK */}
+
+                      {status === "active" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busyId === user.id}
+                          trackLabel={`Block:${user.name}`}
+                          onClick={() => toggleBlock(user)}
+                        >
+                          {busyId === user.id ? "Blocking..." : "Block"}
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+
+            {users && paginatedUsers.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-6 py-6 text-center text-muted">
-                  No users match your search.
+                  No users found.
+                </td>
+              </tr>
+            )}
+
+            {!users && (
+              <tr>
+                <td colSpan={7} className="px-6 py-6 text-center text-muted">
+                  Loading users...
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+
+        {/* ======================================================
+            PAGINATION
+        ======================================================= */}
+
+        {sortedUsers.length > 0 && (
+          <div className="flex items-center justify-between border-t border-border px-6 py-4">
+            <p className="text-sm text-muted">
+              Showing{" "}
+              <span className="font-medium text-foreground">
+                {(currentPage - 1) * PAGE_SIZE + 1}
+              </span>{" "}
+              to{" "}
+              <span className="font-medium text-foreground">
+                {Math.min(currentPage * PAGE_SIZE, sortedUsers.length)}
+              </span>{" "}
+              of{" "}
+              <span className="font-medium text-foreground">
+                {sortedUsers.length}
+              </span>
+            </p>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage === 1}
+                className="rounded-md border border-border px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+
+              {Array.from({ length: totalPages }, (_, index) => index + 1).map(
+                (page) => (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => setCurrentPage(page)}
+                    className={`rounded-md px-3 py-1.5 text-sm ${
+                      currentPage === page
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border hover:bg-surface"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ),
+              )}
+
+              <button
+                type="button"
+                onClick={() =>
+                  setCurrentPage((page) => Math.min(totalPages, page + 1))
+                }
+                disabled={currentPage === totalPages}
+                className="rounded-md border border-border px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </Card>
 
-      {showCreate && (
+      {showCreateUser && (
         <CreateUserModal
-          onClose={() => setShowCreate(false)}
+          onClose={() => setShowCreateUser(false)}
           onCreated={() => {
-            setShowCreate(false);
-            load();
+            setShowCreateUser(false);
+            loadUsers();
           }}
         />
       )}

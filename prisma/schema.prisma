@@ -22,7 +22,6 @@ model User {
   phone           String?
   mailingAddress  String?
 
-  paperlessBilling      Boolean @default(true)
   remindPaymentDue      Boolean @default(true)
   notifyPaymentPosted   Boolean @default(true)
   notifySecurityAlerts  Boolean @default(true)

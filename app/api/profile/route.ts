@@ -12,7 +12,7 @@ export async function GET() {
     where: { id: (session.user as any).id },
     select: {
       name: true, email: true, phone: true, mailingAddress: true, emailVerified: true,
-      paperlessBilling: true, remindPaymentDue: true, notifyPaymentPosted: true, notifySecurityAlerts: true,
+      remindPaymentDue: true, notifyPaymentPosted: true, notifySecurityAlerts: true,
     },
   });
   return NextResponse.json({ user });
@@ -22,7 +22,6 @@ const schema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().optional(),
   mailingAddress: z.string().optional(),
-  paperlessBilling: z.boolean().optional(),
   remindPaymentDue: z.boolean().optional(),
   notifyPaymentPosted: z.boolean().optional(),
   notifySecurityAlerts: z.boolean().optional(),

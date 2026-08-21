@@ -42,11 +42,12 @@ export default function RegisterPage() {
   return (
     <div>
       <div className="mb-8 text-center">
-        <div className="mx-auto mb-4 flex items-center justify-center ">
+        <div className="mx-auto mb-1 flex items-center justify-center ">
                 <Image src={brand.logo} alt="Logo" width={140} height={40} />
               </div>
         <h1 className="text-2xl font-bold text-foreground">Create your account</h1>
-        <p className="mt-1 text-sm text-muted">Sign up to get started</p>
+        <p className="mt-2 text-sm text-muted">    Get started with your loan management account
+</p>
       </div>
 
       <Card>
@@ -69,7 +70,7 @@ export default function RegisterPage() {
             id="name"
             type="text"
             label="Full name"
-            placeholder="Jane Doe"
+            placeholder="First and last name"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
@@ -77,7 +78,7 @@ export default function RegisterPage() {
             id="email"
             type="email"
             label="Email"
-            placeholder="you@example.com"
+            placeholder="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -112,7 +113,7 @@ export default function RegisterPage() {
 
       <p className="mt-6 text-center text-sm text-muted">
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-foreground hover:underline">
+        <Link href="/login" className="font-semibold text-foreground underline">
           Log in
         </Link>
       </p>

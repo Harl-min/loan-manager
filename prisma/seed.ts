@@ -14,6 +14,7 @@ async function main() {
       email: "harlmeen51@gmail.com",
       passwordHash,
       role: "BORROWER",
+      status: "ACTIVE",
       emailVerified: true,
     },
   });
@@ -26,6 +27,7 @@ async function main() {
       email: "admin@neptune.dev",
       passwordHash: await bcrypt.hash("admin123", 10),
       role: "ADMIN",
+      status: "ACTIVE",
       emailVerified: true,
     },
   });
@@ -61,9 +63,18 @@ async function main() {
   });
 
   const months = [
-    "2025-09-15", "2025-10-15", "2025-11-15", "2025-12-15",
-    "2026-01-15", "2026-02-15", "2026-03-15", "2026-04-15",
-    "2026-05-15", "2026-06-15", "2026-07-15", "2026-08-15",
+    "2025-09-15",
+    "2025-10-15",
+    "2025-11-15",
+    "2025-12-15",
+    "2026-01-15",
+    "2026-02-15",
+    "2026-03-15",
+    "2026-04-15",
+    "2026-05-15",
+    "2026-06-15",
+    "2026-07-15",
+    "2026-08-15",
   ];
   let ref = 100000;
   for (const [i, d] of months.entries()) {
@@ -101,10 +112,34 @@ async function main() {
 
   await prisma.document.createMany({
     data: [
-      { loanId: loan.id, title: "Monthly Statement — July 2026", category: "Statement", periodLabel: "Aug 1, 2025 – Jul 2026", date: new Date("2026-08-01") },
-      { loanId: loan.id, title: "Monthly Statement — June 2026", category: "Statement", periodLabel: "Jul 1, 2026 – Jun 2026", date: new Date("2026-07-01") },
-      { loanId: loan.id, title: "Form 1098 — Tax Year 2025", category: "Tax Form", periodLabel: "Jan 31, 2026 · 2025", date: new Date("2026-01-31") },
-      { loanId: loan.id, title: "Loan Agreement", category: "Contract", periodLabel: "Aug 15, 2023", date: new Date("2023-08-15") },
+      {
+        loanId: loan.id,
+        title: "Monthly Statement — July 2026",
+        category: "Statement",
+        periodLabel: "Aug 1, 2025 – Jul 2026",
+        date: new Date("2026-08-01"),
+      },
+      {
+        loanId: loan.id,
+        title: "Monthly Statement — June 2026",
+        category: "Statement",
+        periodLabel: "Jul 1, 2026 – Jun 2026",
+        date: new Date("2026-07-01"),
+      },
+      {
+        loanId: loan.id,
+        title: "Form 1098 — Tax Year 2025",
+        category: "Tax Form",
+        periodLabel: "Jan 31, 2026 · 2025",
+        date: new Date("2026-01-31"),
+      },
+      {
+        loanId: loan.id,
+        title: "Loan Agreement",
+        category: "Contract",
+        periodLabel: "Aug 15, 2023",
+        date: new Date("2023-08-15"),
+      },
     ],
   });
 

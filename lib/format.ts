@@ -1,5 +1,5 @@
 export function fmtCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "NGN" }).format(amount);
 }
 
 export function fmtDate(date: Date | string): string {
