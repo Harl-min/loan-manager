@@ -14,6 +14,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("")
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +31,7 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      await api.post("/register", { name: name || email.split("@")[0], email, password });
+      await api.post("/register", { name: name || email.split("@")[0], email, phone, password });
       router.push(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch (err: any) {
       setError(err.message ?? "Something went wrong. Please try again.");
@@ -82,7 +83,17 @@ export default function RegisterPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+          /> <Input
+            id="phoneNo"
+            type="number"
+            label="Phone Number"
+            placeholder="Active Phone Number"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            required
           />
+          <span className="flex flex-row gap-4">
+
           <Input
             id="password"
             type="password"
@@ -102,6 +113,7 @@ export default function RegisterPage() {
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
           />
+          </span>
 
           {error && <p className="text-sm text-danger">{error}</p>}
 

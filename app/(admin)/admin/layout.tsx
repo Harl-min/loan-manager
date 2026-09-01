@@ -8,10 +8,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if ((session?.user as any)?.role !== "ADMIN") redirect("/dashboard");
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <AdminSidebar />
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* Static Sidebar */}
+      <aside className="h-screen shrink-0">
+        <AdminSidebar />
+      </aside>
+
+      {/* Scrollable Content */}
       <main className="flex-1 overflow-y-auto px-10 py-8">
-        <div className="mx-auto max-w-5xl">{children}</div>
+        <div className="mx-auto max-w-5xl">
+          {children}
+        </div>
       </main>
     </div>
   );

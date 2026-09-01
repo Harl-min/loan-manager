@@ -1,206 +1,210 @@
-"use client";
+import { notFound } from "next/navigation";
+import { getServerSession } from "next-auth";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { Card } from "@/components/ui/Card";
-import { api } from "@/lib/api";
-import { fmtCurrency, fmtDate } from "@/lib/format";
-import { clsx } from "@/lib/clsx";
-import AmortizationSchedule from "@/components/AmortizationSchedule";
+import { authOptions } from "@/lib/auth";
+import type {
+  LoanScheduleItem,
+  LoanScheduleResponse,
+  LoanAccountHistoryItem,
+  LoanAccountHistoryResponse,
+} from "@/types/loan";
 
-type Transaction = {
-  id: string;
-  label: string;
-  reference: string | null;
-  amount: number;
-  date: string;
-  type: string;
+import {
+  LoanStatistics,
+  LoanStatisticsResponse,
+} from "@/types/loanSummary";
+
+import AdminLoanDetailClient from "@/components/AdminTabs";
+
+type Props = {
+  params: {
+    id: string;
+    loanId: string;
+  };
 };
 
-type LoanDetail = {
-  id: string;
-  nickname: string;
-  accountNumber: string;
-  status: string;
-  originalAmount: number;
-  interestRate: number;
-  termMonths: number;
-  originationDate: string;
-  maturityDate: string;
-  monthlyPayment: number;
-  principal: number;
-  accruedInterest: number;
-  lateFees: number;
-  escrow: number;
-  ytdInterestPaid: number;
-  ytdPrincipalPaid: number;
-  transactions: Transaction[];
-  user: { id: string; name: string; email: string };
-};
+export default async function AdminLoanDetailPage({
+  params,
+}: Props) {
+  const session = await getServerSession(authOptions);
 
-const tabs = ["Details", "Transactions", "Schedule"] as const;
+  if (!session?.user) {
+    notFound();
+  }
 
-export default function AdminLoanDetailPage() {
-  const params = useParams<{ id: string; loanId: string }>();
-  const router = useRouter();
-  const [loan, setLoan] = useState<LoanDetail | null>(null);
-  const [tab, setTab] = useState<(typeof tabs)[number]>("Details");
+  /*
+   * IMPORTANT:
+   *
+   * loanId is NOT a Prisma loan ID anymore.
+   *
+   * It is the account number coming directly
+   * from CustomerDetailPage.
+   *
+   * Example:
+   *
+   * /admin/users/123/loans/5000152687
+   *
+   * params.loanId = "5000152687"
+   */
+  const accountNo = params.loanId;
 
-  useEffect(() => {
-    api.get<{ loan: LoanDetail }>(`/admin/loans/${params.loanId}`).then((r) => setLoan(r.loan));
-  }, [params.loanId]);
+  if (!accountNo) {
+    notFound();
+  }
 
-  if (!loan) return <p className="text-sm text-muted">Loading…</p>;
+  const BASE_URL = process.env.NEXT_DATA_API_URL;
 
-  const totalBalance = loan.principal + loan.accruedInterest + loan.lateFees + loan.escrow;
+  let statistics: LoanStatistics | null = null;
+  let transactions: LoanAccountHistoryItem[] = [];
+  let schedule: LoanScheduleItem[] = [];
+
+  let apiError = false;
+
+  if (!BASE_URL) {
+    console.error("NEXT_DATA_API_URL is not configured.");
+    apiError = true;
+  } else {
+    /*
+     * =========================================================
+     * LOAN STATISTICS
+     * =========================================================
+     *
+     * Uses the account number received from the account list.
+     */
+    try {
+      const response = await fetch(
+        `${BASE_URL}/loanStatistics/loanStatisticsRestService/execute?acctNum=${encodeURIComponent(
+          accountNo
+        )}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Loan statistics API returned ${response.status}`
+        );
+      }
+
+      const data: LoanStatisticsResponse =
+        await response.json();
+
+      statistics =
+        data.loanstatisticsdbReferenceOutput?.[0] ?? null;
+
+      if (!statistics) {
+        apiError = true;
+      }
+    } catch (error) {
+      console.error(
+        `Failed to fetch loan statistics for ${accountNo}:`,
+        error
+      );
+
+      apiError = true;
+    }
+
+    /*
+     * =========================================================
+     * ACCOUNT HISTORY
+     * =========================================================
+     */
+    try {
+      const response = await fetch(
+        `${BASE_URL}/loanAccountHistory/loanAccountHistoryRestService/loanAccountHistory?LoanAccountNo=${encodeURIComponent(
+          accountNo
+        )}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Loan account history API returned ${response.status}`
+        );
+      }
+
+      const data: LoanAccountHistoryResponse =
+        await response.json();
+
+      transactions =
+        data.loanAccountHistoryBusinessServiceOutput ?? [];
+    } catch (error) {
+      console.error(
+        `Failed to fetch account history for ${accountNo}:`,
+        error
+      );
+
+      /*
+       * Keep the page available even if history fails.
+       */
+      transactions = [];
+    }
+
+    /*
+     * =========================================================
+     * REPAYMENT SCHEDULE
+     * =========================================================
+     */
+    try {
+      const response = await fetch(
+        `${BASE_URL}/loanRepaymentSchedule/loanScheduleRestService/loanSchedule?loanAccount=${encodeURIComponent(
+          accountNo
+        )}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Loan repayment schedule API returned ${response.status}`
+        );
+      }
+
+      const data: LoanScheduleResponse =
+        await response.json();
+
+      schedule =
+        data.loanScheduledbReferenceOutput ?? [];
+    } catch (error) {
+      console.error(
+        `Failed to fetch repayment schedule for ${accountNo}:`,
+        error
+      );
+
+      /*
+       * Keep the page available even if schedule fails.
+       */
+      schedule = [];
+    }
+  }
 
   return (
-    <div>
-      <button
-        data-track-label="Back to customer"
-        onClick={() => router.push(`/admin/users/${params.id}`)}
-        className="text-sm text-muted hover:text-foreground"
-      >
-        ← Back to {loan.user.name}
-      </button>
-
-      <div className="mt-2 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{loan.nickname}</h1>
-          <p className="text-sm text-muted">
-            Account {loan.accountNumber} • {loan.interestRate}% fixed • {loan.user.email}
-          </p>
-        </div>
-        <div className="text-right">
-          <div className="text-xs text-muted">Current Balance</div>
-          <div className="text-xl font-bold text-foreground">{fmtCurrency(totalBalance)}</div>
-        </div>
-      </div>
-
-      <div className="mt-6 flex gap-6 border-b border-border text-sm">
-        {tabs.map((t) => (
-          <button
-            key={t}
-            type="button"
-            data-track-label={`Admin loan tab:${t}`}
-            onClick={() => setTab(t)}
-            className={clsx(
-              "-mb-px border-b-2 pb-3 font-medium transition-colors",
-              tab === t ? "border-primary text-foreground" : "border-transparent text-muted hover:text-foreground"
-            )}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-6">
-        {tab === "Details" && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="mb-3 font-semibold text-foreground">Contract Details</h2>
-              <div className="grid grid-cols-4 gap-4">
-                <Card className="p-4">
-                  <div className="text-xs text-muted">Original Amount</div>
-                  <div className="mt-1 text-lg font-semibold text-foreground">{fmtCurrency(loan.originalAmount)}</div>
-                  <div className="mt-1 text-xs text-muted">Originated {fmtDate(loan.originationDate)}</div>
-                </Card>
-                <Card className="p-4">
-                  <div className="text-xs text-muted">Interest Rate</div>
-                  <div className="mt-1 text-lg font-semibold text-foreground">{loan.interestRate}%</div>
-                  <div className="mt-1 text-xs text-muted">Fixed rate</div>
-                </Card>
-                <Card className="p-4">
-                  <div className="text-xs text-muted">Term</div>
-                  <div className="mt-1 text-lg font-semibold text-foreground">{loan.termMonths} months</div>
-                  <div className="mt-1 text-xs text-muted">Matures {fmtDate(loan.maturityDate)}</div>
-                </Card>
-                <Card className="p-4">
-                  <div className="text-xs text-muted">Monthly Payment</div>
-                  <div className="mt-1 text-lg font-semibold text-foreground">{fmtCurrency(loan.monthlyPayment)}</div>
-                </Card>
-              </div>
-            </div>
-
-            <div>
-              <h2 className="mb-3 font-semibold text-foreground">Balance Breakdown</h2>
-              <Card className="divide-y divide-border p-0">
-                <BreakdownRow label="Principal" value={loan.principal} />
-                <BreakdownRow label="Accrued Interest" value={loan.accruedInterest} />
-                <BreakdownRow label="Late Fees" value={loan.lateFees} />
-                <BreakdownRow label="Escrow" value={loan.escrow} />
-                <div className="flex items-center justify-between px-6 py-3 font-semibold text-foreground">
-                  <span>Total Balance</span>
-                  <span>{fmtCurrency(totalBalance)}</span>
-                </div>
-              </Card>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Card>
-                <div className="text-xs text-muted">YTD Interest Paid</div>
-                <div className="mt-1 text-lg font-semibold text-foreground">{fmtCurrency(loan.ytdInterestPaid)}</div>
-              </Card>
-              <Card>
-                <div className="text-xs text-muted">YTD Principal Paid</div>
-                <div className="mt-1 text-lg font-semibold text-foreground">{fmtCurrency(loan.ytdPrincipalPaid)}</div>
-              </Card>
-            </div>
-          </div>
-        )}
-
-        {tab === "Transactions" && (
-          <Card className="divide-y divide-border p-0">
-            {loan.transactions.map((t) => (
-              <div key={t.id} className="flex items-center justify-between px-6 py-4">
-                <div className="flex items-center gap-3">
-                  <span
-                    className={clsx(
-                      "h-2 w-2 rounded-full",
-                      t.type === "payment" ? "bg-success" : t.type === "fee_waived" ? "bg-warning" : "bg-primary"
-                    )}
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-foreground">{t.label}</div>
-                    <div className="text-xs text-muted">
-                      {fmtDate(t.date)}
-                      {t.reference ? ` • ${t.reference}` : ""}
-                    </div>
-                  </div>
-                </div>
-                <div className={clsx("text-sm font-semibold", t.amount < 0 ? "text-foreground" : "text-success")}>
-                  {t.amount < 0 ? "-" : "+"}
-                  {fmtCurrency(Math.abs(t.amount))}
-                </div>
-              </div>
-            ))}
-            {loan.transactions.length === 0 && (
-              <p className="px-6 py-6 text-center text-sm text-muted">No transactions yet.</p>
-            )}
-          </Card>
-        )}
-
-        {tab === "Schedule" && (
-          <AmortizationSchedule
-            principal={loan.principal}
-            annualRate={loan.interestRate}
-            monthlyPayment={loan.monthlyPayment}
-            remainingMonths={Math.max(
-              1,
-              Math.round((new Date(loan.maturityDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 30.44))
-            )}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function BreakdownRow({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex items-center justify-between px-6 py-3 text-sm">
-      <span className="text-muted">{label}</span>
-      <span className="font-medium text-foreground">{fmtCurrency(value)}</span>
-    </div>
+    <AdminLoanDetailClient
+      accountNo={accountNo}
+      statistics={statistics}
+      transactions={transactions}
+      schedule={schedule}
+      customerId={params.id}
+      apiError={apiError}
+    />
   );
 }

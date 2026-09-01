@@ -81,11 +81,11 @@ export default function SettingsPage() {
             value={profile.phone ?? ""}
             onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
           />
-          <Input
+          {/* <Input
             label="Mailing address"
             value={profile.mailingAddress ?? ""}
             onChange={(e) => setProfile({ ...profile, mailingAddress: e.target.value })}
-          />
+          /> */}
         </div>
         <Button className="mt-4" trackLabel="Save changes" onClick={saveProfile} disabled={saving === "profile"}>
           {saving === "profile" ? "Saving…" : "Save changes"}

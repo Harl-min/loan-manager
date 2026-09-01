@@ -1,86 +1,258 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card } from "@/components/ui/Card";
-import { fmtCurrency, fmtDate } from "@/lib/format";
+import { fmtCurrency } from "@/lib/format";
+import { Card } from "./ui/Card";
+
+type LoanScheduleItem = {
+  InstallmentNo: number;
+  LoanAccount: string;
+  DueDate: string;
+  EventType: string;
+  CurrencyCode: string;
+  PrincipalAmount: number;
+  InterestAmount: number;
+  FeeAmount: number;
+  LateFeeAmount: number;
+  TotalAmount: number;
+  ServicedAmount: number;
+  UnservicedAmount: number;
+  ServicedDate: string | null;
+};
+
+type AmortizationScheduleProps = {
+  schedule: LoanScheduleItem[];
+};
+
+type SortField = "date" | "balance";
+type SortDirection = "asc" | "desc";
+
+const ITEMS_PER_PAGE = 10;
 
 export default function AmortizationSchedule({
-  principal,
-  annualRate,
-  monthlyPayment,
-  remainingMonths,
-}: {
-  principal: number;
-  annualRate: number;
-  monthlyPayment: number;
-  remainingMonths: number;
-}) {
-  const [extra, setExtra] = useState(0);
+  schedule,
+}: AmortizationScheduleProps) {
+  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortDirection, setSortDirection] =
+    useState<SortDirection>("asc");
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const rows = useMemo(() => {
-    const monthlyRate = annualRate / 100 / 12;
-    let balance = principal;
-    const out: { n: number; date: Date; payment: number; interest: number; balance: number }[] = [];
-    const today = new Date();
-
-    for (let i = 1; i <= remainingMonths && balance > 0.005; i++) {
-      const interest = balance * monthlyRate;
-      let payment = monthlyPayment + extra;
-      let principalPortion = payment - interest;
-      if (principalPortion > balance) {
-        principalPortion = balance;
-        payment = principalPortion + interest;
-      }
-      balance = Math.max(0, balance - principalPortion);
-
-      const date = new Date(today.getFullYear(), today.getMonth() + i, 15);
-      out.push({ n: i, date, payment, interest, balance });
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((current) =>
+        current === "asc" ? "desc" : "asc"
+      );
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
     }
-    return out;
-  }, [principal, annualRate, monthlyPayment, extra, remainingMonths]);
+
+    setCurrentPage(1);
+  };
+
+  const sortedSchedule = useMemo(() => {
+    return [...schedule].sort((a, b) => {
+      let comparison = 0;
+
+      if (sortField === "date") {
+        // API date format: DD-MM-YYYY
+        const [aDay, aMonth, aYear] = a.DueDate.split("-").map(Number);
+        const [bDay, bMonth, bYear] = b.DueDate.split("-").map(Number);
+
+        const aDate = new Date(aYear, aMonth - 1, aDay).getTime();
+        const bDate = new Date(bYear, bMonth - 1, bDay).getTime();
+
+        comparison = aDate - bDate;
+      }
+
+      if (sortField === "balance") {
+        comparison = a.UnservicedAmount - b.UnservicedAmount;
+      }
+
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+  }, [schedule, sortField, sortDirection]);
+
+  const totalPages = Math.ceil(
+    sortedSchedule.length / ITEMS_PER_PAGE
+  );
+
+  const paginatedSchedule = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+
+    return sortedSchedule.slice(
+      startIndex,
+      startIndex + ITEMS_PER_PAGE
+    );
+  }, [sortedSchedule, currentPage]);
+
+  const startItem =
+    sortedSchedule.length === 0
+      ? 0
+      : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+
+  const endItem = Math.min(
+    currentPage * ITEMS_PER_PAGE,
+    sortedSchedule.length
+  );
+
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return "↕";
+    }
+
+    return sortDirection === "asc" ? "↑" : "↓";
+  };
+
+  const goToPage = (page: number) => {
+    if (page < 1 || page > totalPages) return;
+
+    setCurrentPage(page);
+  };
+
+  if (schedule.length === 0) {
+    return (
+      <div className="rounded-brand border border-border px-6 py-8 text-center text-sm text-muted">
+        No repayment schedule found.
+      </div>
+    );
+  }
 
   return (
-    <Card className="p-0">
-      {/* <div className="border-b border-border p-6">
-        <h3 className="font-semibold text-foreground">&quot;What-If&quot; Calculator</h3>
-        <label className="mt-3 block text-sm font-medium text-foreground">Extra monthly payment</label>
-        <div className="relative mt-1.5 w-40">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
-          <input
-            type="number"
-            min={0}
-            value={extra}
-            onChange={(e) => setExtra(Number(e.target.value) || 0)}
-            className="w-full rounded-brand border border-border py-2 pl-7 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
-        </div>
-      </div> */}
-
-      <div className="max-h-96 overflow-y-auto">
+    <Card className="py-3">
+      <div className="max-h-90 overflow-y-auto">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-surface text-xs text-muted">
+          <thead className="sticky top-0 z-10 bg-surface text-xs text-muted">
             <tr>
-              <th className="px-6 py-2 text-left font-medium">#</th>
-              <th className="px-6 py-2 text-left font-medium">Date</th>
-              <th className="px-6 py-2 text-right font-medium">Payment</th>
-              <th className="px-6 py-2 text-right font-medium">Interest</th>
-              <th className="px-6 py-2 text-right font-medium">Balance</th>
+              <th className="px-6 py-2 text-left font-medium">
+                #
+              </th>
+
+              <th className="px-6 py-2 text-left font-medium">
+                <button
+                  type="button"
+                  onClick={() => handleSort("date")}
+                  className="inline-flex items-center gap-1 hover:text-foreground"
+                >
+                  Date
+                  <span className="text-[11px]">
+                    {getSortIcon("date")}
+                  </span>
+                </button>
+              </th>
+
+              <th className="px-6 py-2 text-right font-medium">
+                Principal
+              </th>
+
+              <th className="px-6 py-2 text-right font-medium">
+                Interest
+              </th>
+
+               <th className="px-6 py-2 text-right font-medium">
+                Monthly Payment
+              </th>
+
+              <th className="px-6 py-2 text-right font-medium">
+                Amount Paid
+              </th>
+
+              <th className="px-6 py-2 text-right font-medium">
+                <button
+                  type="button"
+                  onClick={() => handleSort("balance")}
+                  className="ml-auto inline-flex items-center gap-1 hover:text-foreground"
+                >
+                  Outstanding
+                  <span className="text-[11px]">
+                    {getSortIcon("balance")}
+                  </span>
+                </button>
+              </th>
             </tr>
           </thead>
+
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.n} className="border-t border-border">
-                <td className="px-6 py-2.5 text-muted">{r.n}</td>
-                <td className="px-6 py-2.5">{fmtDate(r.date)}</td>
-                <td className="px-6 py-2.5 text-right">{fmtCurrency(r.payment)}</td>
-                <td className="px-6 py-2.5 text-right text-muted">{fmtCurrency(r.interest)}</td>
+            {paginatedSchedule.map((r, index) => (
+              <tr
+                key={`${r.InstallmentNo}-${r.DueDate}-${r.EventType}-${index}`}
+                className="border-t border-border"
+              >
+                <td className="px-6 py-2.5 text-muted">
+                  {r.InstallmentNo}
+                </td>
+
+                <td className="px-6 py-2.5">
+                  {r.DueDate}
+                </td>
+
+                <td className="px-6 py-2.5 text-right">
+                  {fmtCurrency(r.PrincipalAmount)}
+                </td>
+
+                <td className="px-6 py-2.5 text-right text-muted">
+                  {fmtCurrency(r.InterestAmount)}
+                </td>
+
                 <td className="px-6 py-2.5 text-right font-semibold text-foreground">
-                  {fmtCurrency(r.balance)}
+                  {fmtCurrency(r.TotalAmount)}
+                </td>
+                <td className="px-6 py-2.5 text-right  text-foreground">
+                  {fmtCurrency(r.ServicedAmount)}
+                </td>
+                <td className="px-6 py-2.5 text-right font-semibold text-foreground">
+                  {fmtCurrency(r.UnservicedAmount)}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between border-t border-border px-6 py-3">
+        <p className="text-xs text-muted">
+          Showing {startItem}-{endItem} of{" "}
+          {sortedSchedule.length}
+        </p>
+
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => goToPage(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="rounded-brand border border-border px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Previous
+          </button>
+
+          {Array.from(
+            { length: totalPages },
+            (_, index) => index + 1
+          ).map((page) => (
+            <button
+              key={page}
+              type="button"
+              onClick={() => goToPage(page)}
+              className={`min-w-[32px] rounded-brand px-2 py-1.5 text-xs font-medium transition ${
+                currentPage === page
+                  ? "bg-primary text-white"
+                  : "text-muted hover:bg-muted/20"
+              }`}
+            >
+              {page}
+            </button>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => goToPage(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="rounded-brand border border-border px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
       </div>
     </Card>
   );

@@ -1,5 +1,12 @@
+// export function fmtCurrency(amount: number): string {
+//   return new Intl.NumberFormat("en-US", { style: "currency", currency: "NGN" }).format(amount);
+// }
+
 export function fmtCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "NGN" }).format(amount);
+  return `₦${new Intl.NumberFormat("en-NG", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount)}`;
 }
 
 export function fmtDate(date: Date | string): string {

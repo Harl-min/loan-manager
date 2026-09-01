@@ -87,7 +87,9 @@ function VerifyEmailForm() {
             {loading ? "Verifying…" : "Verify"}
           </Button>
         </form>
-        <p className="mt-4 text-center text-sm text-muted">
+                <p className="mt-3 text-center text-muted text-sm">OTP received expires in <span className="text-foreground font-semibold">10Mins</span></p>
+
+        <p className="mt-2 text-center text-sm text-muted">
           Didn&apos;t receive the code?{" "}
           <button
             type="button"

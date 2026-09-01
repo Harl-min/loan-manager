@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { fmtCurrency } from "@/lib/format";
+import { fmtCurrency, fmtDate } from "@/lib/format";
 import LoanTabs from "@/components/LoanTabs";
+
+import {
+  LoanStatistics,
+  LoanStatisticsResponse,
+} from "@/types/loanSummary";
 
 export default async function LoanLayout({
   children,
@@ -13,36 +14,128 @@ export default async function LoanLayout({
   children: React.ReactNode;
   params: { id: string };
 }) {
-  const session = await getServerSession(authOptions);
-  const loan = await prisma.loanAccount.findFirst({
-    where: { id: params.id, userId: (session!.user as any).id },
-  });
-  if (!loan) notFound();
+  const accountNo = params.id;
+  const BASE_URL = process.env.NEXT_DATA_API_URL;
+
+  let statistics: LoanStatistics | null = null;
+
+  if (BASE_URL) {
+    try {
+      const response = await fetch(
+        `${BASE_URL}/loanStatistics/loanStatisticsRestService/execute?acctNum=${encodeURIComponent(
+          accountNo
+        )}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
+        }
+      );
+
+      if (response.ok) {
+        const data: LoanStatisticsResponse =
+          await response.json();
+
+        statistics =
+          data.loanstatisticsdbReferenceOutput?.[0] ?? null;
+      }
+    } catch (error) {
+      console.error(
+        `Failed to fetch loan statistics for ${accountNo}:`,
+        error
+      );
+    }
+  }
+
+  const accountName =
+    statistics?.ACCT_NM || "Loan Account";
+
+  const accountStatus = statistics
+    ? formatAccountStatus(statistics.ACCOUNT_STATUS)
+    : "Unavailable";
 
   return (
     <div>
-      <Link href="/dashboard" data-track-label="Back to dashboard" className="text-sm text-muted hover:text-foreground">
+
+      <Link
+        href="/dashboard"
+        data-track-label="Back to dashboard"
+        className="text-sm text-muted hover:text-foreground"
+      >
         ← Back to dashboard
       </Link>
 
       <div className="mt-2 flex items-start justify-between">
+
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{loan.nickname}</h1>
-          <p className="text-sm text-muted">
-            Account {loan.accountNumber} • {loan.interestRate}% fixed
-          </p>
-        </div>
-        <div className="text-right">
-          <div className="text-xs text-muted">Current Balance</div>
-          <div className="text-xl font-bold text-foreground">
-            {fmtCurrency(loan.principal + loan.accruedInterest + loan.lateFees)}
+
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-foreground">
+              {accountName}
+            </h1>
+
+            <span className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">
+              {accountStatus}
+            </span>
           </div>
+
+          <p className="text-sm text-muted">
+            Account {accountNo}
+
+            {statistics?.INTEREST_RATE !== undefined &&
+              ` • ${statistics.INTEREST_RATE}% fixed`}
+          </p>
+
+          {statistics?.MATURITY_DT && (
+            <p className="mt-1 text-xs text-muted">
+              Matures {fmtDate(statistics.MATURITY_DT)}
+            </p>
+          )}
+
         </div>
+
+        <div className="text-right">
+
+          <div className="text-xs text-muted">
+            Current Balance
+          </div>
+
+          <div className="text-xl font-bold text-foreground">
+            {statistics
+              ? fmtCurrency(
+                  statistics.TOTAL_OUTSTANDING_ALL
+                )
+              : "—"}
+          </div>
+
+        </div>
+
       </div>
 
-      <LoanTabs loanId={loan.id} />
+      <LoanTabs loanId={accountNo} />
 
-      <div className="mt-6">{children}</div>
+      <div className="mt-6">
+        {children}
+      </div>
+
     </div>
   );
+}
+
+function formatAccountStatus(status: string) {
+  switch (status) {
+    case "A":
+      return "Active";
+    case "I":
+      return "Inactive";
+    case "C":
+      return "Closed";
+    case "D":
+      return "Dormant";
+    default:
+      return status || "Unknown";
+  }
 }
