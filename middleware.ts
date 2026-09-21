@@ -7,7 +7,7 @@ export default withAuth(
     const role = (req.nextauth.token as any)?.role;
 
     // Admin-only section — borrowers get redirected back to their dashboard.
-    if (pathname.startsWith("/admin") && role !== "ADMIN") {
+    if (pathname.startsWith("/admin") && role !== "admin") {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
 

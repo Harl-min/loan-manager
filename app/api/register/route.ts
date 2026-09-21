@@ -1,45 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
-
-const schema = z.object({
-  name: z.string().min(1),
-  email: z.string().email(),
-  password: z.string().min(8),
-});
-
-function generateOtp() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
+import { authApi, RemoteApiError } from "@/lib/auth-api";
+const schema = z
+  .object({
+    full_name: z.string().min(1),
+    email: z.string().email(),
+    phone_number: z.string().min(1),
+    password: z.string().min(8),
+    confirm_password: z.string().min(8),
+  })
+  .refine((value) => value.password === value.confirm_password, {
+    message: "Passwords do not match.",
+  });
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Please check the form and try again." }, { status: 400 });
+  const parsed = schema.safeParse(await req.json());
+  if (!parsed.success)
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          parsed.error.issues[0]?.message ?? "Invalid registration details.",
+      },
+      { status: 400 },
+    );
+  try {
+    return NextResponse.json(
+      await authApi.register({
+        ...parsed.data,
+        email: parsed.data.email.toLowerCase(),
+      }),
+    );
+  } catch (error) {
+    const status = error instanceof RemoteApiError ? error.status : 500;
+    return NextResponse.json(
+      {
+        success: false,
+        message: error instanceof Error ? error.message : "Unable to register.",
+      },
+      { status },
+    );
   }
-  const { name, email, password } = parsed.data;
-
-  const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (existing) {
-    return NextResponse.json({ error: "An account with that email already exists." }, { status: 409 });
-  }
-
-  const passwordHash = await bcrypt.hash(password, 10);
-  const user = await prisma.user.create({
-    data: { name, email: email.toLowerCase(), passwordHash, role: "BORROWER" },
-  });
-
-  const code = generateOtp();
-  await prisma.otpCode.create({
-    data: { userId: user.id, code, expiresAt: new Date(Date.now() + 10 * 60 * 1000) },
-  });
-
-  // No email provider configured in this starter — the OTP is logged
-  // server-side so you can complete the flow locally. Wire up a real
-  // provider (Resend, SES, Postmark, …) here for production.
-  console.log(`[neptune] OTP for ${email}: ${code}`);
-
-  return NextResponse.json({ ok: true });
 }

@@ -29,6 +29,7 @@ const config: Config = {
           DEFAULT: withOpacity("--color-accent"),
           foreground: withOpacity("--color-accent-foreground"),
         },
+        hover: withOpacity("--color-hover"),
         success: withOpacity("--color-success"),
         warning: withOpacity("--color-warning"),
         danger: withOpacity("--color-danger"),

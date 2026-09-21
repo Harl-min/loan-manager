@@ -1,30 +1,28 @@
-import { NextResponse } from "next/server";
+// app/api/admin/customer-accounts/route.ts
+import { NextRequest, NextResponse } from "next/server";
 
 const BASE_URL = process.env.NEXT_DATA_API_URL;
 
-// Hardcoded temporarily for testing
-const CUST_NUM = "0000035668";
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   if (!BASE_URL) {
     return NextResponse.json(
-      {
-        success: false,
-        message: "Loan API base URL is not configured",
-        accounts: [],
-      },
+      { success: false, message: "Loan API base URL is not configured", accounts: [] },
       { status: 503 }
     );
   }
 
+  const custNum = request.nextUrl.searchParams.get("custNum");
+
+  if (!custNum) {
+    return NextResponse.json(
+      { success: false, message: "custNum is required", accounts: [] },
+      { status: 400 }
+    );
+  }
+
   try {
-    /*
-     * 1. Get customer's loan/account list
-     */
     const loanListResponse = await fetch(
-      `${BASE_URL}/loanList/loanListRestService/loanList?custNum=${encodeURIComponent(
-        CUST_NUM
-      )}`,
+      `${BASE_URL}/loanList/loanListRestService/loanList?custNum=${encodeURIComponent(custNum)}`,
       {
         method: "GET",
         headers: {
@@ -36,19 +34,12 @@ export async function GET() {
     );
 
     if (!loanListResponse.ok) {
-      throw new Error(
-        `Loan list API returned ${loanListResponse.status}`
-      );
+      throw new Error(`Loan list API returned ${loanListResponse.status}`);
     }
 
     const loanListData = await loanListResponse.json();
+    const accounts = loanListData.loanListdbReferenceOutput ?? [];
 
-    const accounts =
-      loanListData.loanListdbReferenceOutput ?? [];
-
-    /*
-     * 2. Get statistics for every account
-     */
     const accountsWithStatistics = await Promise.all(
       accounts.map(async (account: any) => {
         try {
@@ -67,36 +58,17 @@ export async function GET() {
           );
 
           if (!statisticsResponse.ok) {
-            throw new Error(
-              `Statistics API returned ${statisticsResponse.status}`
-            );
+            throw new Error(`Statistics API returned ${statisticsResponse.status}`);
           }
 
-          const statisticsData =
-            await statisticsResponse.json();
-
+          const statisticsData = await statisticsResponse.json();
           const statistics =
-            statisticsData.loanstatisticsdbReferenceOutput?.[0] ??
-            null;
+            statisticsData.loanstatisticsdbReferenceOutput?.[0] ?? null;
 
-          return {
-            ...account,
-            statistics,
-          };
+          return { ...account, statistics };
         } catch (error) {
-          console.error(
-            `Failed to fetch statistics for account ${account.ACCT_NO}:`,
-            error
-          );
-
-          /*
-           * Keep the account even when its
-           * statistics API fails.
-           */
-          return {
-            ...account,
-            statistics: null,
-          };
+          console.error(`Failed to fetch statistics for account ${account.ACCT_NO}:`, error);
+          return { ...account, statistics: null };
         }
       })
     );
@@ -107,12 +79,10 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Failed to fetch customer accounts:", error);
-
     return NextResponse.json(
       {
         success: false,
-        message:
-          "Unable to retrieve customer loan accounts",
+        message: "Unable to retrieve customer loan accounts",
         accounts: [],
       },
       { status: 503 }

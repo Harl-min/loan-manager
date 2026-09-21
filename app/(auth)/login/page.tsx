@@ -1,127 +1,287 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
+import Link from "next/link";
+import Image from "next/image";
+
+import { Card } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
-import { Card } from "@/components/ui/Card";
-import Image from "next/image";
-import { brand } from "@/lib/brand";
+import { brand } from "@/lib/brand"; // adjust if needed
+import themelogo from "@/public/assets/images/BOI-Thematic.png"; // adjust if needed
+import StatusDialog from "@/components/StatusDialog";
 
-export default function LoginPage() {
+type StatusDialogState = {
+  open: boolean;
+  type: "success" | "error";
+  title: string;
+  message: string;
+  buttonText: string;
+};
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Only active when URL is /login?admin=1
+  const isAdminMode = searchParams.get("admin") === "1";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  
-async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
 
-    const res = await signIn("credentials", {
-      email,
+  const [statusDialog, setStatusDialog] = useState<StatusDialogState>({
+    open: false,
+    type: "error",
+    title: "",
+    message: "",
+    buttonText: "Close",
+  });
+
+  const closeStatusDialog = () => {
+    setStatusDialog((prev) => ({ ...prev, open: false }));
+  };
+
+  // ----------------------------------------------------------
+  // CUSTOMER → existing API then OTP page
+  // ----------------------------------------------------------
+  async function handleCustomerLogin() {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok || !data?.success) {
+      setStatusDialog({
+        open: true,
+        type: "error",
+        title: "Login Failed",
+        message:
+          data?.message ??
+          data?.detail ??
+          "That email or password doesn't look right.",
+        buttonText: "Close",
+      });
+      return;
+    }
+
+    setStatusDialog({
+      open: true,
+      type: "success",
+      title: "Login successful",
+      message:
+        "A verification code has been sent to your email. Continue to enter the code.",
+      buttonText: "Continue",
+    });
+  }
+
+  // ----------------------------------------------------------
+  // ADMIN → NextAuth signIn (creates session with role: admin)
+  // ----------------------------------------------------------
+  async function handleAdminLogin() {
+    const result = await signIn("credentials", {
+      email: email.trim().toLowerCase(),
       password,
+      loginType: "admin",
       redirect: false,
     });
 
-    setLoading(false);
+    console.log("Admin signIn result:", result);
 
- if (res?.error === "EMAIL_NOT_VERIFIED") {
-      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+    if (!result || result.error) {
+      setStatusDialog({
+        open: true,
+        type: "error",
+        title: "Admin Login Failed",
+        message:
+          result?.error ?? "Invalid admin credentials. Please try again.",
+        buttonText: "Close",
+      });
       return;
     }
-    if (res?.error === "ACCOUNT_BLOCKED") {
-      setError("This account has been blocked. Contact your administrator.");
-      return;
-    }
-    if (res?.error) {
-      setError("That email or password doesn't look right.");
-      return;
-    }
-    // Root route inspects the session and routes admins to the admin
-    // console, borrowers to their dashboard.
-    router.push("/");
-    router.refresh();
+
+    setStatusDialog({
+      open: true,
+      type: "success",
+      title: "Admin login successful",
+      message: "You have been signed in as an administrator.",
+      buttonText: "Continue to Admin",
+    });
   }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      if (isAdminMode) {
+        await handleAdminLogin();
+      } else {
+        await handleCustomerLogin();
+      }
+    } catch {
+      setStatusDialog({
+        open: true,
+        type: "error",
+        title: "Connection Error",
+        message:
+          "Unable to reach the authentication service. Please try again.",
+        buttonText: "Close",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleDialogClose = () => {
+    const wasSuccess = statusDialog.type === "success";
+    const targetEmail = email.trim().toLowerCase();
+
+    closeStatusDialog();
+
+    if (!wasSuccess) return;
+
+    if (isAdminMode) {
+      router.push("/admin/users");
+      router.refresh(); // so middleware sees the new session
+    } else if (targetEmail) {
+      router.push(
+        `/verify-email-login?email=${encodeURIComponent(targetEmail)}`,
+      );
+    }
+  };
 
   return (
     <div>
-      <div className="mb-8 text-center">
-        <div className="mx-auto mb-4 flex items-center justify-center ">
-          <Image src={brand.logo} alt="Logo" width={140} height={40} />
-        </div>
-      <h1 className="text-2xl font-bold text-foreground">
-  Welcome to Loan Manager
-</h1>
+ <div className="relative left-1/2 w-screen -translate-x-1/2">
+  <div className="flex min-h-screen w-full">
+    {/* LEFT - Theme image */}
+    <div className="hidden w-1/2 items-center justify-center lg:flex">
+      <Image
+        src={themelogo}
+        alt=""
+        width={400}
+        height={400}
+        className="h-[500px] w-[500px] object-contain opacity-90"
+      />
+    </div>
 
-<p className="mt-1 text-sm text-muted">
-  Sign in to access your loan management dashboard.
-</p>
-      </div>
-
-      <Card>
-        {/* <button
-          type="button"
-          data-track-label="Continue with Google"
-          className="mb-4 flex w-full items-center justify-center gap-2 rounded-brand border border-border py-2.5 text-sm font-medium hover:bg-muted/10"
-          onClick={() => signIn("google")}
-        >
-          <span aria-hidden>G</span> Continue with Google
-        </button> */}
-
-        {/* <div className="my-4 flex items-center gap-3 text-xs text-muted">
-          <div className="h-px flex-1 bg-border" />
-          OR
-          <div className="h-px flex-1 bg-border" />
-        </div> */}
-
-        <form onSubmit={handleSubmit} className="space-y-10">
-          <Input
-            id="email"
-            type="email"
-            label="Email"
-            placeholder="Email address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <label htmlFor="password" className="text-sm font-medium text-foreground">
-                Password
-              </label>
-            </div>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
+    {/* RIGHT - Login */}
+    <div className="login flex w-full items-center justify-center px-8 lg:w-1/2">
+      <div className="w-full max-w-md">
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-4 flex items-center justify-center">
+            <Image
+              src={brand.logo}
+              alt="Logo"
+              width={200}
+              height={40}
             />
-              <Link href="#" className="flex justify-end mt-2 text-xs font-medium text-foreground underline">
-                Forgot password?
-              </Link>
           </div>
 
-          {error && <p className="text-sm text-danger">{error}</p>}
+          <h1 className="text-2xl font-semibold text-primary">
+            {isAdminMode ? "Admin Sign In" : "Welcome to Loan Manager"}
+          </h1>
 
-          <Button type="submit" trackLabel="Log in" className="w-full" disabled={loading}>
-            {loading ? "Logging in…" : "Log in"}
-          </Button>
-        </form>
-      </Card>
+          <p className="mt-1 text-sm text-muted">
+            {isAdminMode
+              ? "Sign in with your administrator credentials."
+              : "Sign in to access your loan management dashboard."}
+          </p>
+        </div>
 
-      <p className="mt-6 text-center text-sm text-muted">
-        Don&apos;t have an account?{" "}
-        <Link href="/register" className="font-semibold text-foreground underline">
-          Create one
-        </Link>
-      </p>
+        <Card>
+          <form onSubmit={handleSubmit} className="space-y-10">
+            <Input
+              id="email"
+              type="email"
+              label="Email"
+              placeholder="Email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label
+                  htmlFor="password"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Password
+                </label>
+              </div>
+
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+
+              {!isAdminMode && (
+                <Link
+                  href="#"
+                  className="mt-2 flex justify-end text-xs font-medium text-foreground underline hover:text-hover"
+                >
+                  Forgot password?
+                </Link>
+              )}
+            </div>
+
+            <Button
+              type="submit"
+              trackLabel={isAdminMode ? "Admin log in" : "Log in"}
+              className="w-full"
+              disabled={loading}
+            >
+              {loading
+                ? "Logging in…"
+                : isAdminMode
+                  ? "Admin Log in"
+                  : "Log in"}
+            </Button>
+          </form>
+        </Card>
+
+        {!isAdminMode && (
+          <p className="mt-6 text-center text-sm text-muted">
+            Don&apos;t have an account?{" "}
+            <Link
+              href="/register"
+              className="font-semibold text-foreground underline hover:text-hover"
+            >
+              Create one
+            </Link>
+          </p>
+        )}
+      </div>
     </div>
+  </div>
+</div>
+      <StatusDialog
+        open={statusDialog.open}
+        type={statusDialog.type}
+        title={statusDialog.title}
+        message={statusDialog.message}
+        buttonText={statusDialog.buttonText}
+        onClose={handleDialogClose}
+      />
+    </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<p className="text-sm text-muted">Loading…</p>}>
+      <LoginForm />
+    </Suspense>
   );
 }

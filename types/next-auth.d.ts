@@ -1,21 +1,31 @@
+import "next-auth";
+import "next-auth/jwt";
 import { DefaultSession } from "next-auth";
 
 declare module "next-auth" {
+  interface User {
+    id: string;
+    role?: "admin" | "BORROWER";
+    accessToken: string;
+    refreshToken?: string;
+    accessTokenExpiresAt?: number;
+  }
+
   interface Session {
     user: {
       id: string;
-      role: "BORROWER" | "ADMIN";
+      role?: "admin" | "BORROWER";
     } & DefaultSession["user"];
-  }
-  interface User {
-    id: string;
-    role: "BORROWER" | "ADMIN";
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
-    id: string;
-    role: "BORROWER" | "ADMIN";
+    id?: string;
+    role?: "admin" | "BORROWER";
+    accessToken?: string;
+    refreshToken?: string;
+    accessTokenExpiresAt?: number;
+    refreshError?: boolean;
   }
 }

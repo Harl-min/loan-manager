@@ -35,14 +35,6 @@ export default async function SchedulePage({
   if (!session?.user) {
     notFound();
   }
-
-
-
-  /*
-   * Replace `loan.accountNumber` with the actual field
-   * in your LoanAccount model that contains:
-   * 5000152687
-   */
   const accountNo = params.id;
   const BASE_URL = process.env.NEXT_DATA_API_URL;
 
@@ -71,7 +63,7 @@ export default async function SchedulePage({
     }
 
     const data: LoanScheduleResponse = await response.json();
-
+    console.log("Loan repayment schedule data:", data);
     schedule = data.loanScheduledbReferenceOutput ?? [];
   if (!data) {
         apiError = true;

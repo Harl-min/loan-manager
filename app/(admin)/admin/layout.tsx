@@ -5,7 +5,7 @@ import AdminSidebar from "@/components/AdminSidebar";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
-  if ((session?.user as any)?.role !== "ADMIN") redirect("/dashboard");
+  if ((session?.user as any)?.role !== "admin") redirect("/dashboard");
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

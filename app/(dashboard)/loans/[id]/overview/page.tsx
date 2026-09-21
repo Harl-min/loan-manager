@@ -5,6 +5,109 @@ import {
   LoanStatisticsResponse,
 } from "@/types/loanSummary";
 
+type LoanScheduleItem = {
+  InstallmentNo: number;
+  LoanAccount: string;
+  DueDate: string;
+  EventType: string;
+  CurrencyCode: string;
+  PrincipalAmount: number;
+  InterestAmount: number;
+  FeeAmount: number;
+  LateFeeAmount: number;
+  TotalAmount: number;
+  ServicedAmount: number;
+  UnservicedAmount: number;
+  ServicedDate: string | null;
+};
+
+type LoanScheduleResponse = {
+  loanScheduledbReferenceOutput: LoanScheduleItem[];
+};
+
+function parseScheduleDate(date: string): Date | null {
+  const [day, month, year] = date.split("-").map(Number);
+
+  if (
+    !day ||
+    !month ||
+    !year ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
+  ) {
+    return null;
+  }
+
+  const result = new Date(year, month - 1, day);
+
+  if (
+    result.getFullYear() !== year ||
+    result.getMonth() !== month - 1 ||
+    result.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return result;
+}
+
+function fmtScheduleDate(date: string): string {
+  const parsed = parseScheduleDate(date);
+
+  if (!parsed) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(parsed);
+}
+
+function getNextPayment(
+  schedule: LoanScheduleItem[]
+): LoanScheduleItem | null {
+  const today = new Date();
+
+  today.setHours(0, 0, 0, 0);
+
+  const unservicedPayments = schedule
+    .filter(
+      (item) =>
+        item.EventType === "REPAYMENT" &&
+        Number(item.UnservicedAmount) > 0
+    )
+    .map((item) => ({
+      ...item,
+      parsedDueDate: parseScheduleDate(item.DueDate),
+    }))
+    .filter(
+      (item) => item.parsedDueDate !== null
+    )
+    .sort(
+      (a, b) =>
+        a.parsedDueDate!.getTime() -
+        b.parsedDueDate!.getTime()
+    );
+
+  // First: today's or future unserviced payment
+  const upcomingPayment = unservicedPayments.find(
+    (item) =>
+      item.parsedDueDate!.getTime() >= today.getTime()
+  );
+
+  if (upcomingPayment) {
+    return upcomingPayment;
+  }
+
+  // Fallback: earliest overdue unserviced payment
+  return unservicedPayments[0] ?? null;
+}
+
+
 export default async function OverviewPage({
   params,
 }: {
@@ -15,7 +118,46 @@ export default async function OverviewPage({
 
   let statistics: LoanStatistics | null = null;
   let apiError = false;
+let nextPayment: LoanScheduleItem | null = null;
+if (BASE_URL && accountNo) {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/loanRepaymentSchedule/loanScheduleRestService/loanSchedule?loanAccount=${encodeURIComponent(
+        accountNo
+      )}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+      }
+    );
 
+    if (!response.ok) {
+      throw new Error(
+        `Loan repayment schedule API returned ${response.status}`
+      );
+    }
+
+    const data: LoanScheduleResponse = await response.json();
+
+    const schedule =
+      data.loanScheduledbReferenceOutput ?? [];
+
+    nextPayment = getNextPayment(schedule);
+  } catch (error) {
+    console.error(
+      `Failed to fetch loan repayment schedule for ${accountNo}:`,
+      error
+    );
+
+    // Don't necessarily make the whole overview unavailable.
+    // The statistics can still display.
+    nextPayment = null;
+  }
+}
   if (BASE_URL && accountNo) {
     try {
       const response = await fetch(
@@ -78,7 +220,7 @@ export default async function OverviewPage({
             <div className="mt-1 text-lg font-semibold text-foreground">
               {statistics
                 ? fmtCurrency(
-                    statistics.ORIGINAL_LOAN_AMOUNT
+                    statistics.DISBURSED_BAL
                   )
                 : "—"}
             </div>
@@ -129,16 +271,22 @@ export default async function OverviewPage({
           </Card>
 
           <Card className="p-4">
-            <div className="text-xs text-muted">
-              Next Payment Due
-            </div>
+  <div className="text-xs text-muted">
+    Next Payment Due
+  </div>
 
-            <div className="mt-1 text-lg font-semibold text-foreground">
-              {statistics
-                ? fmtCurrency(statistics.TOTAL_DUE_NEXT)
-                : "—"}
-            </div>
-          </Card>
+  <div className="mt-1 text-lg font-semibold text-foreground">
+    {nextPayment
+      ? fmtCurrency(nextPayment.UnservicedAmount)
+      : "—"}
+  </div>
+
+  <div className="mt-1 text-xs text-muted">
+    {nextPayment?.DueDate
+      ? `Due ${fmtScheduleDate(nextPayment.DueDate)}`
+      : "—"}
+  </div>
+</Card>
 
         </div>
       </div>
@@ -168,7 +316,7 @@ export default async function OverviewPage({
           <BreakdownRow
             label="Charges"
             value={
-              statistics?.TOTAL_CHRGS ?? null
+              (statistics?.TOTAL_CHRGS || statistics?.CHARGES) ?? null
             }
           />
 

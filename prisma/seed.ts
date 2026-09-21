@@ -14,7 +14,7 @@ async function main() {
       email: "harlmeen51@gmail.com",
       passwordHash,
       role: "BORROWER",
-      status: "ACTIVE",
+        // status: "ACTIVE",
       emailVerified: true,
     },
   });
@@ -27,7 +27,7 @@ async function main() {
       email: "admin@neptune.dev",
       passwordHash: await bcrypt.hash("admin123", 10),
       role: "ADMIN",
-      status: "ACTIVE",
+        // status: "ACTIVE",
       emailVerified: true,
     },
   });

@@ -6,7 +6,6 @@ import Link from "next/link";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
-import { api } from "@/lib/api";
 import Image from "next/image";
 import { brand } from "@/lib/brand";
 
@@ -20,33 +19,102 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
+async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault();
 
-    if (password !== confirmPassword) {
-      setError("Passwords don't match.");
+  setError(null);
+
+  if (password !== confirmPassword) {
+    setError("Passwords don't match.");
+    return;
+  }
+
+  setLoading(true);
+
+  const registerEmail = email.trim().toLowerCase();
+
+  try {
+    const response = await fetch("/api/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+     body: JSON.stringify({
+        full_name: name,
+        email: email.toLowerCase(),
+        phone_number: phone,
+        password,
+        confirm_password: confirmPassword,
+      }),
+    });
+
+    const data = await response.json().catch(() => null);
+
+    console.log("Register HTTP status:", response.status);
+    console.log("Register response:", data);
+
+    // No valid response
+    if (!data) {
+      setError(
+        "No valid response was received from the authentication service."
+      );
       return;
     }
 
-    setLoading(true);
-    try {
-      await api.post("/register", { name: name || email.split("@")[0], email, phone, password });
-      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
-    } catch (err: any) {
-      setError(err.message ?? "Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
+    // Registration failed
+    if (!response.ok) {
+      setError(
+        data?.message ||
+          data?.error ||
+          "Unable to create your account."
+      );
+      return;
     }
+
+    // API must explicitly confirm registration success
+    if (data?.success !== true) {
+      setError(
+        data?.message ||
+          data?.error ||
+          "Unable to create your account."
+      );
+      return;
+    }
+
+    // Registration succeeded.
+    // Only now proceed to email verification.
+    const registeredEmail =
+      data?.data?.email || registerEmail;
+
+    console.log(
+      "Registration successful. Redirecting to email verification:",
+      registeredEmail
+    );
+
+    router.push(
+      `/verify-email?email=${encodeURIComponent(
+        registeredEmail
+      )}`
+    );
+  } catch (error) {
+    console.error("Register error:", error);
+
+    setError(
+      "Unable to connect to the authentication service. Please try again."
+    );
+  } finally {
+    setLoading(false);
   }
+}
 
   return (
     <div>
       <div className="mb-8 text-center">
         <div className="mx-auto mb-1 flex items-center justify-center ">
-                <Image src={brand.logo} alt="Logo" width={140} height={40} />
+                <Image src={brand.logo} alt="Logo" width={200} height={40} />
               </div>
-        <h1 className="text-2xl font-bold text-foreground">Create your account</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Create your account</h1>
         <p className="mt-2 text-sm text-muted">    Get started with your loan management account
 </p>
       </div>

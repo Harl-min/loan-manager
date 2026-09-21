@@ -28,8 +28,8 @@ export default function LoanTabs({ loanId }: { loanId: string }) {
             className={clsx(
               "-mb-px border-b-2 pb-3 font-medium transition-colors",
               active
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted hover:text-foreground"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted hover:text-primary"
             )}
           >
             {tab.label}

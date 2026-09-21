@@ -73,7 +73,7 @@ export default async function LoanLayout({
         <div>
 
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-foreground">
+            <h1 className="text-2xl font-bold text-primary">
               {accountName}
             </h1>
 
@@ -103,7 +103,7 @@ export default async function LoanLayout({
             Current Balance
           </div>
 
-          <div className="text-xl font-bold text-foreground">
+          <div className="text-xl font-bold text-primary">
             {statistics
               ? fmtCurrency(
                   statistics.TOTAL_OUTSTANDING_ALL

@@ -31,7 +31,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         data-track-label={trackLabel}
         className={clsx(
-          "inline-flex items-center justify-center gap-2 rounded-brand font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none",
+          "inline-flex items-center justify-center gap-2 rounded-brand font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none hover:bg-hover",
           variantClasses[variant],
           sizeClasses[size],
           className

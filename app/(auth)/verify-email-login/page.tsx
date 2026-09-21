@@ -14,6 +14,7 @@ type StatusDialogState = {
   title?: string;
   message?: string;
   buttonText?: string;
+  onClose?: () => void;
 };
 
 function VerifyEmailForm() {
@@ -128,135 +129,99 @@ function VerifyEmailForm() {
   // ------------------------------------------------------------
   // VERIFY OTP
   // ------------------------------------------------------------
-async function handleVerify(e: React.FormEvent) {
-  e.preventDefault();
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault();
 
-  if (code.length !== 6) {
-    setStatusDialog({
-      open: true,
-      type: "error",
-      title: "Invalid OTP",
-      message:
-        "Please enter the complete 6-digit verification code.",
-      buttonText: "Close",
-    });
-
-    return;
-  }
-
-  if (!email.trim()) {
-    setStatusDialog({
-      open: true,
-      type: "error",
-      title: "Verification Error",
-      message:
-        "Your email address is missing. Please restart the verification process.",
-      buttonText: "Close",
-    });
-
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    const response = await fetch("/api/verify", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email: email.trim().toLowerCase(),
-        otp_code: code,
-        purpose: "registration",
-      }),
-    });
-
-    const contentType =
-      response.headers.get("content-type") ?? "";
-
-    let result: {
-      success?: boolean;
-      message?: string;
-      error?: string;
-      data?: unknown;
-    } = {};
-
-    if (contentType.includes("application/json")) {
-      result = await response.json().catch(() => ({}));
-    } else {
-      const text = await response.text();
-
-      result = {
-        message: text,
-      };
-    }
-
-    console.log("=================================");
-    console.log("REGISTRATION OTP RESULT");
-    console.log("=================================");
-    console.log("Status:", response.status);
-    console.log("Response:", result);
-
-    if (!response.ok || result.success === false) {
-      const errorMessage =
-        result.message ||
-        result.error ||
-        "That code didn't work. Please try again.";
-
-      console.error(
-        "Registration OTP verification failed:",
-        errorMessage,
-      );
-
+    if (code.length < 6) {
       setStatusDialog({
         open: true,
         type: "error",
-        title: "Verification Failed",
-        message: errorMessage,
+        title: "Invalid OTP",
+        message: "Please enter the complete 6-digit verification code.",
         buttonText: "Close",
       });
 
       return;
     }
 
-    /*
-     * Registration verification succeeded.
-     *
-     * Change this redirect if your registration flow
-     * should go somewhere other than /login.
-     */
-    setStatusDialog({
-      open: true,
-      type: "success",
-      title: "Email verified",
-      message:
-        "Your email has been verified successfully. You can now log in to your account.",
-      buttonText: "Continue to Login",
-    });
-  } catch (err: unknown) {
-    console.error(
-      "Registration OTP verification exception:",
-      err,
-    );
+    if (!email.trim()) {
+      setStatusDialog({
+        open: true,
+        type: "error",
+        title: "Verification Error",
+        message: "Your email address is missing. Please restart the verification process.",
+        buttonText: "Close",
+      });
 
-    const message =
-      err instanceof Error
-        ? err.message
-        : "Unable to verify OTP. Please try again.";
+      return;
+    }
 
-    setStatusDialog({
-      open: true,
-      type: "error",
-      title: "Verification Failed",
-      message,
-      buttonText: "Close",
-    });
-  } finally {
-    setLoading(false);
+    setLoading(true);
+
+    try {
+      const result = await signIn("credentials", {
+        email: email.trim().toLowerCase(),
+        otp: code,
+        purpose: "registration",
+        redirect: false,
+      });
+
+      console.log("=================================");
+      console.log("NextAuth signIn result");
+      console.log("=================================");
+      console.log(result);
+
+      // ----------------------------------------------------------
+      // NEXTAUTH ERROR
+      // ----------------------------------------------------------
+      if (!result || result.error) {
+        const errorMessage =
+          result?.error ||
+          "That code didn't work. Please try again.";
+
+        console.error("OTP verification failed:", errorMessage);
+
+        setStatusDialog({
+          open: true,
+          type: "error",
+          title: "Verification Failed",
+          message: errorMessage,
+          buttonText: "Close",
+        });
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // SUCCESS
+      // ----------------------------------------------------------
+      setStatusDialog({
+        open: true,
+        type: "success",
+        title: "Login successful",
+        message:
+          "Your email has been verified successfully. You can now access your account.",
+        buttonText: "Continue to Dashboard",
+      });
+    } catch (err: unknown) {
+      console.error("OTP verification exception:", err);
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : "That code didn't work. Please try again.";
+
+      setStatusDialog({
+        open: true,
+        type: "error",
+        title: "Verification Failed",
+        message,
+        buttonText: "Close",
+      });
+    } finally {
+      setLoading(false);
+    }
   }
-}
-
 
   // ------------------------------------------------------------
   // RESEND OTP
@@ -274,7 +239,7 @@ async function handleVerify(e: React.FormEvent) {
         },
         body: JSON.stringify({
           email,
-          purpose: "registration",
+          purpose: "login",
         }),
       });
 
@@ -337,6 +302,10 @@ async function handleVerify(e: React.FormEvent) {
         title: "Unable to Resend Code",
         message,
         buttonText: "Close",
+        onClose: () => {
+    setStatusDialog((prev) => ({ ...prev, open: false }));
+    router.push("/login");
+  },
       });
     } finally {
       setLoading(false);
@@ -355,7 +324,7 @@ async function handleVerify(e: React.FormEvent) {
     }));
 
     if (wasSuccess) {
-      router.push("/login");
+      router.push("/dashboard");
     }
   }
 
@@ -368,7 +337,7 @@ async function handleVerify(e: React.FormEvent) {
         </div>
 
         <h1 className="text-2xl font-bold text-foreground">
-          Verify your registration email
+          Verify your login email
         </h1>
 
         <p className="mt-1 text-sm text-muted">
