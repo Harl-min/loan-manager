@@ -150,8 +150,15 @@ export default async function DashboardPage() {
    */
   console.log("---- LOAN STATISTICS API ----");
 
-  const primaryAccount =
-    accounts.find((account) => account.REC_ST === "A") ?? accounts[0];
+  // const primaryAccount =
+  //   accounts.find((account) => account.REC_ST === "A") ?? accounts[0];
+
+    /*
+   * =======================================================
+   * 3. GET LOAN STATISTICS (only when linked)
+   * =======================================================
+   */
+  console.log("---- LOAN STATISTICS API ----");
 
   if (!BASE_URL) {
     console.error(
@@ -186,23 +193,17 @@ export default async function DashboardPage() {
           );
 
           if (!response.ok) {
-            throw new Error(
-              `Loan statistics API returned ${response.status}`,
-            );
+            throw new Error(`Loan statistics API returned ${response.status}`);
           }
 
           const data: LoanStatisticsResponse = await response.json();
           console.log(`Statistics response [${account.ACCT_NO}]:`, data);
 
-          const statistics =
-            data.loanstatisticsdbReferenceOutput?.[0] ?? null;
+          const statistics = data.loanstatisticsdbReferenceOutput?.[0] ?? null;
 
           return { accountNumber: account.ACCT_NO, statistics };
         } catch (error) {
-          console.error(
-            `Statistics API ERROR [${account.ACCT_NO}]:`,
-            error,
-          );
+          console.error(`Statistics API ERROR [${account.ACCT_NO}]:`, error);
           return { accountNumber: account.ACCT_NO, statistics: null };
         }
       }),
@@ -219,29 +220,66 @@ export default async function DashboardPage() {
     }
   }
 
-  console.log("========================================");
-  console.log("DASHBOARD API FLOW END");
-  console.log("Final customer number:", custNum);
-  console.log("Linked:", isLinked);
-  console.log("Final accounts:", accounts.length);
-  console.log("========================================");
-  const primaryStatistics = primaryAccount
-  ? statisticsByAccount.get(primaryAccount.ACCT_NO)
-  : null;
-  
-  const totalOutstanding = primaryStatistics?.TOTAL_OUTSTANDING_ALL ?? null;
-  const nextPayment = primaryStatistics?.TOTAL_DUE_NEXT ?? null;
-  const dueNow = primaryStatistics?.TOTAL_DUE_NOW ?? null;
+  /*
+   * =======================================================
+   * AGGREGATE STATS (after map is filled)
+   * =======================================================
+   */
+  const allStats = [...statisticsByAccount.values()];
+
+  const sum = (pick: (s: LoanStatistics) => number) =>
+    allStats.reduce((acc, s) => acc + (Number(pick(s)) || 0), 0);
+
+  const hasStats = allStats.length > 0;
+
+  const totalOutstanding = hasStats
+    ? sum((s) => s.TOTAL_OUTSTANDING_ALL)
+    : null;
+  const nextPayment = hasStats ? sum((s) => s.TOTAL_DUE_NEXT) : null;
+  const dueNow = hasStats ? sum((s) => s.TOTAL_DUE_NOW) : null;
+  const principalPaid = hasStats ? sum((s) => s.PRINCIPAL_PAID) : 0;
+  const originalLoanAmount = hasStats
+    ? sum((s) => s.ORIGINAL_LOAN_AMOUNT)
+    : 0;
+  const remainingPrincipal = hasStats
+    ? sum((s) => s.TOTAL_PRINCIPAL_OUTSTANDING)
+    : 0;
 
   const percentPaidOff =
-  primaryStatistics && primaryStatistics.ORIGINAL_LOAN_AMOUNT > 0
-  ? Math.round(
-    (primaryStatistics.PRINCIPAL_PAID /
-      primaryStatistics.ORIGINAL_LOAN_AMOUNT) *
-      100,
-    )
-    : 0;
-    console.log(primaryStatistics);
+    originalLoanAmount > 0
+      ? Math.round((principalPaid / originalLoanAmount) * 100)
+      : 0;
+
+  const statusLabel =
+    allStats.length === 1
+      ? formatAccountStatus(allStats[0].ACCOUNT_STATUS)
+      : allStats.length > 1
+        ? `${allStats.length} accounts`
+        : null;
+
+  // console.log("========================================");
+  // console.log("DASHBOARD API FLOW END");
+  // console.log("Final customer number:", custNum);
+  // console.log("Linked:", isLinked);
+  // console.log("Final accounts:", accounts.length);
+  // console.log("========================================");
+  // const primaryStatistics = primaryAccount
+  // ? statisticsByAccount.get(primaryAccount.ACCT_NO)
+  // : null;
+
+  // const totalOutstanding = primaryStatistics?.TOTAL_OUTSTANDING_ALL ?? null;
+  // const nextPayment = primaryStatistics?.TOTAL_DUE_NEXT ?? null;
+  // const dueNow = primaryStatistics?.TOTAL_DUE_NOW ?? null;
+
+  // const percentPaidOff =
+  // primaryStatistics && primaryStatistics.ORIGINAL_LOAN_AMOUNT > 0
+  // ? Math.round(
+  //   (primaryStatistics.PRINCIPAL_PAID /
+  //     primaryStatistics.ORIGINAL_LOAN_AMOUNT) *
+  //     100,
+  //   )
+  //   : 0;
+  //   console.log(primaryStatistics);
 
   return (
     <div>
@@ -268,24 +306,21 @@ export default async function DashboardPage() {
               : "—"
           }
         />
-
         <StatCard
           label="Total Due Next"
           value={
             isLinked && nextPayment !== null ? fmtCurrency(nextPayment) : "—"
           }
         />
-
         <StatCard
           label="Total Due Now"
           value={isLinked && dueNow !== null ? fmtCurrency(dueNow) : "—"}
         />
-
         <StatCard
           label="Status"
           value={
-            isLinked && primaryStatistics
-              ? formatAccountStatus(primaryStatistics.ACCOUNT_STATUS)
+            isLinked && statusLabel
+              ? statusLabel
               : isUnlinked
                 ? "Not linked"
                 : "—"
@@ -305,23 +340,20 @@ export default async function DashboardPage() {
         <Card className="mt-6">
           <h2 className="font-semibold text-foreground">Loan Progress</h2>
           <p className="mt-1 text-sm text-muted">
-            {primaryStatistics
+            {allStats.length > 0
               ? `${percentPaidOff}% of total principal paid off`
               : "Loan progress information unavailable"}
           </p>
 
           <div className="mt-6 flex items-center gap-8">
-            <ProgressRing percent={primaryStatistics ? percentPaidOff : 0} />
+            <ProgressRing percent={allStats.length > 0 ? percentPaidOff : 0} />
 
             <div className="flex-1 space-y-3">
               <div className="h-2 w-full overflow-hidden rounded-full bg-border">
                 <div
                   className="h-full bg-success"
                   style={{
-                    width: `${Math.min(
-                      100,
-                      Math.max(0, primaryStatistics ? percentPaidOff : 0),
-                    )}%`,
+                    width: `${Math.min(100, Math.max(0, percentPaidOff))}%`,
                   }}
                 />
               </div>
@@ -329,29 +361,19 @@ export default async function DashboardPage() {
               <Row
                 label="Principal Paid"
                 dotClass="bg-success"
-                value={
-                  primaryStatistics
-                    ? fmtCurrency(primaryStatistics.PRINCIPAL_PAID)
-                    : "—"
-                }
+                value={allStats.length > 0 ? fmtCurrency(principalPaid) : "—"}
               />
-
               <Row
                 label="Remaining Balance"
                 dotClass="bg-border"
                 value={
-                  primaryStatistics
-                    ? fmtCurrency(primaryStatistics.TOTAL_PRINCIPAL_OUTSTANDING)
-                    : "—"
+                  allStats.length > 0 ? fmtCurrency(remainingPrincipal) : "—"
                 }
               />
-
               <div className="flex items-center justify-between border-t border-border pt-3 text-sm">
                 <span className="text-muted">Original Loan Amount</span>
                 <span className="font-medium text-foreground">
-                  {primaryStatistics
-                    ? fmtCurrency(primaryStatistics.ORIGINAL_LOAN_AMOUNT)
-                    : "—"}
+                  {allStats.length > 0 ? fmtCurrency(originalLoanAmount) : "—"}
                 </span>
               </div>
             </div>
@@ -432,7 +454,9 @@ export default async function DashboardPage() {
                       statistics
                         ? `${statistics.TERM_VALUE} ${
                             statistics.TERM_CD === "M"
-                              ? "months"
+                              ? "Months"
+                                : statistics.TERM_CD === "Y"
+                              ? "Years"
                               : statistics.TERM_CD
                           }`
                         : "—"
@@ -440,9 +464,7 @@ export default async function DashboardPage() {
                   />
                   <Field
                     label="Maturity"
-                    value={
-                      statistics ? fmtDate(statistics.MATURITY_DT) : "—"
-                    }
+                    value={statistics ? fmtDate(statistics.MATURITY_DT) : "—"}
                   />
                 </div>
 
@@ -460,7 +482,7 @@ export default async function DashboardPage() {
       </div>
     </div>
   );
-} 
+}
 
 function formatAccountStatus(status: string) {
   switch (status) {

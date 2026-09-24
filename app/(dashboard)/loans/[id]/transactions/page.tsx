@@ -153,7 +153,7 @@ export default async function TransactionsPage({
 
                 <div
                   className={`text-sm font-semibold ${
-                    isCredit ? "text-success" : "text-foreground"
+                    isCredit ? "text-success" : "text-danger"
                   }`}
                 >
                   {isCredit ? "+" : "-"}

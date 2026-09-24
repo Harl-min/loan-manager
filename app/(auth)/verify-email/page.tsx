@@ -14,23 +14,24 @@ type StatusDialogState = {
   title?: string;
   message?: string;
   buttonText?: string;
+  redirectToLogin?: boolean;
 };
 
 function VerifyEmailForm() {
   const router = useRouter();
   const params = useSearchParams();
 
-  const email = params.get("email") ?? "";
+  const email = (params.get("email") ?? "").trim().toLowerCase();
+  const isAdmin = params.get("admin") === "1";
 
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
-  const [countdown, setCountdown] = useState(180);
+  const [countdown, setCountdown] = useState(300);
 
-  const [statusDialog, setStatusDialog] =
-    useState<StatusDialogState>({
-      open: false,
-      type: "success",
-    });
+  const [statusDialog, setStatusDialog] = useState<StatusDialogState>({
+    open: false,
+    type: "success",
+  });
 
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
 
@@ -67,11 +68,7 @@ function VerifyEmailForm() {
     index: number,
     e: React.KeyboardEvent<HTMLInputElement>,
   ) {
-    if (
-      e.key === "Backspace" &&
-      !digits[index] &&
-      index > 0
-    ) {
+    if (e.key === "Backspace" && !digits[index] && index > 0) {
       inputsRef.current[index - 1]?.focus();
     }
 
@@ -120,143 +117,108 @@ function VerifyEmailForm() {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
 
-    return `${minutes}:${remainingSeconds
-      .toString()
-      .padStart(2, "0")}`;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   }
 
   // ------------------------------------------------------------
   // VERIFY OTP
   // ------------------------------------------------------------
-async function handleVerify(e: React.FormEvent) {
-  e.preventDefault();
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault();
 
-  if (code.length !== 6) {
-    setStatusDialog({
-      open: true,
-      type: "error",
-      title: "Invalid OTP",
-      message:
-        "Please enter the complete 6-digit verification code.",
-      buttonText: "Close",
-    });
-
-    return;
-  }
-
-  if (!email.trim()) {
-    setStatusDialog({
-      open: true,
-      type: "error",
-      title: "Verification Error",
-      message:
-        "Your email address is missing. Please restart the verification process.",
-      buttonText: "Close",
-    });
-
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    const response = await fetch("/api/verify", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email: email.trim().toLowerCase(),
-        otp_code: code,
-        purpose: "registration",
-      }),
-    });
-
-    const contentType =
-      response.headers.get("content-type") ?? "";
-
-    let result: {
-      success?: boolean;
-      message?: string;
-      error?: string;
-      data?: unknown;
-    } = {};
-
-    if (contentType.includes("application/json")) {
-      result = await response.json().catch(() => ({}));
-    } else {
-      const text = await response.text();
-
-      result = {
-        message: text,
-      };
+    if (code.length !== 6) {
+      setStatusDialog({
+        open: true,
+        type: "error",
+        title: "Invalid OTP",
+        message: "Please enter the complete 6-digit verification code.",
+        buttonText: "Close",
+      });
+      return;
     }
 
-    console.log("=================================");
-    console.log("REGISTRATION OTP RESULT");
-    console.log("=================================");
-    console.log("Status:", response.status);
-    console.log("Response:", result);
+    if (!email) {
+      setStatusDialog({
+        open: true,
+        type: "error",
+        title: "Verification Error",
+        message:
+          "Your email address is missing. Please restart the verification process.",
+        buttonText: "Close",
+      });
+      return;
+    }
 
-    if (!response.ok || result.success === false) {
-      const errorMessage =
-        result.message ||
-        result.error ||
-        "That code didn't work. Please try again.";
+    setLoading(true);
 
-      console.error(
-        "Registration OTP verification failed:",
-        errorMessage,
-      );
+    try {
+      const response = await fetch("/api/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          otp_code: code,
+          purpose: "registration",
+          isAdmin, // selects admin vs user remote API
+        }),
+      });
 
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || result.success === false) {
+        setStatusDialog({
+          open: true,
+          type: "error",
+          title: "Verification Failed",
+          message:
+            result.message ||
+            result.error ||
+            "That code didn't work. Please try again.",
+          buttonText: "Close",
+        });
+        return;
+      }
+
+      setStatusDialog({
+        open: true,
+        type: "success",
+        title: "Email verified",
+        message: isAdmin
+          ? "Your admin account has been verified. You can now sign in."
+          : "Your email has been verified successfully. You can now log in.",
+        buttonText: "Continue to Login",
+        redirectToLogin: true,
+      });
+    } catch (err: unknown) {
       setStatusDialog({
         open: true,
         type: "error",
         title: "Verification Failed",
-        message: errorMessage,
+        message:
+          err instanceof Error
+            ? err.message
+            : "Unable to verify OTP. Please try again.",
         buttonText: "Close",
       });
-
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    /*
-     * Registration verification succeeded.
-     *
-     * Change this redirect if your registration flow
-     * should go somewhere other than /login.
-     */
-    setStatusDialog({
-      open: true,
-      type: "success",
-      title: "Email verified",
-      message:
-        "Your email has been verified successfully. You can now log in to your account.",
-      buttonText: "Continue to Login",
-    });
-  } catch (err: unknown) {
-    console.error(
-      "Registration OTP verification exception:",
-      err,
-    );
-
-    const message =
-      err instanceof Error
-        ? err.message
-        : "Unable to verify OTP. Please try again.";
-
-    setStatusDialog({
-      open: true,
-      type: "error",
-      title: "Verification Failed",
-      message,
-      buttonText: "Close",
-    });
-  } finally {
-    setLoading(false);
   }
-}
 
+  function closeStatusDialog() {
+    const shouldGoToLogin =
+      statusDialog.type === "success" && statusDialog.redirectToLogin;
+
+    setStatusDialog((prev) => ({
+      ...prev,
+      open: false,
+      redirectToLogin: false,
+    }));
+
+    if (shouldGoToLogin) {
+      router.push(isAdmin ? "/login?admin=1" : "/login");
+    }
+  }
 
   // ------------------------------------------------------------
   // RESEND OTP
@@ -278,8 +240,7 @@ async function handleVerify(e: React.FormEvent) {
         }),
       });
 
-      const contentType =
-        response.headers.get("content-type") ?? "";
+      const contentType = response.headers.get("content-type") ?? "";
 
       let data: any = null;
 
@@ -310,7 +271,7 @@ async function handleVerify(e: React.FormEvent) {
       setDigits(["", "", "", "", "", ""]);
 
       // Restart countdown
-      setCountdown(180);
+      setCountdown(300);
 
       // Focus first input
       inputsRef.current[0]?.focus();
@@ -319,8 +280,7 @@ async function handleVerify(e: React.FormEvent) {
         open: true,
         type: "success",
         title: "Code Sent",
-        message:
-          "A new verification code has been sent to your email.",
+        message: "A new verification code has been sent to your email.",
         buttonText: "Continue",
       });
     } catch (err: unknown) {
@@ -346,18 +306,20 @@ async function handleVerify(e: React.FormEvent) {
   // ------------------------------------------------------------
   // CLOSE STATUS DIALOG
   // ------------------------------------------------------------
-  function closeStatusDialog() {
-    const wasSuccess = statusDialog.type === "success";
+  // function closeStatusDialog() {
+  //   const shouldGoToLogin =
+  //     statusDialog.type === "success" && statusDialog.redirectToLogin;
 
-    setStatusDialog((prev) => ({
-      ...prev,
-      open: false,
-    }));
+  //   setStatusDialog((prev) => ({
+  //     ...prev,
+  //     open: false,
+  //     redirectToLogin: false,
+  //   }));
 
-    if (wasSuccess) {
-      router.push("/login");
-    }
-  }
+  //   if (shouldGoToLogin) {
+  //     router.push("/login");
+  //   }
+  // }
 
   return (
     <div>
@@ -368,7 +330,9 @@ async function handleVerify(e: React.FormEvent) {
         </div>
 
         <h1 className="text-2xl font-bold text-foreground">
-          Verify your registration email
+          {isAdmin
+            ? "Verify admin registration email"
+            : "Verify your registration email"}
         </h1>
 
         <p className="mt-1 text-sm text-muted">
@@ -388,20 +352,12 @@ async function handleVerify(e: React.FormEvent) {
                   inputsRef.current[index] = element;
                 }}
                 value={digit}
-                onChange={(e) =>
-                  updateDigit(index, e.target.value)
-                }
-                onKeyDown={(e) =>
-                  handleKeyDown(index, e)
-                }
-                onPaste={(e) =>
-                  handlePaste(index, e)
-                }
+                onChange={(e) => updateDigit(index, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(index, e)}
+                onPaste={(e) => handlePaste(index, e)}
                 inputMode="numeric"
                 maxLength={1}
-                autoComplete={
-                  index === 0 ? "one-time-code" : "off"
-                }
+                autoComplete={index === 0 ? "one-time-code" : "off"}
                 className="h-12 w-11 rounded-brand border border-border text-center text-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             ))}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { clsx } from "@/lib/clsx";
+import { TriangleAlert } from "lucide-react";
 
 const ACCT_URL = process.env.NEXT_PUBLIC_NEXT_DATA_AUTH_URL;
 
@@ -85,8 +86,7 @@ export default function CustomerAccountLink({
    */
   const showLinkForm =
     records !== null &&
-    (!hasRecords ||
-      (allowRetry && hasInvalid && !hasPending && total === 1));
+    (!hasRecords || (allowRetry && hasInvalid && !hasPending && total === 1));
 
   const accessToken =
     ((session as any)?.accessToken as string | undefined) ||
@@ -111,17 +111,14 @@ export default function CustomerAccountLink({
       setError(null);
 
       try {
-        const response = await fetch(
-          `${ACCT_URL}api/v1/auth/my-associations`,
-          {
-            method: "GET",
-            headers: {
-              Accept: "application/json",
-              Authorization: `Bearer ${accessToken}`,
-            },
-            cache: "no-store",
+        const response = await fetch(`${ACCT_URL}api/v1/auth/my-associations`, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${accessToken}`,
           },
-        );
+          cache: "no-store",
+        });
 
         const data = await response.json().catch(() => null);
         console.log("GET /api/v1/auth/my-associations:", data);
@@ -197,18 +194,15 @@ export default function CustomerAccountLink({
 
       console.log("POST /api/v1/auth/associate-profile payload:", payload);
 
-      const response = await fetch(
-        `${ACCT_URL}api/v1/auth/associate-profile`,
-        {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify(payload),
+      const response = await fetch(`${ACCT_URL}api/v1/auth/associate-profile`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
         },
-      );
+        body: JSON.stringify(payload),
+      });
 
       const data = await response.json().catch(() => null);
       console.log("associate-profile response:", data);
@@ -222,8 +216,7 @@ export default function CustomerAccountLink({
       }
 
       setSuccessMsg(
-        data?.message ||
-          "Your account link request was submitted for review.",
+        data?.message || "Your account link request was submitted for review.",
       );
       setAccountNumber("");
       setAllowRetry(false);
@@ -259,8 +252,7 @@ export default function CustomerAccountLink({
                   ? total === 1
                     ? "Your previous link request is invalid. You can try a different account number."
                     : "Your previous link request is invalid. Contact support for help."
-                  : primaryStatus === "profiled" ||
-                      primaryStatus === "approved"
+                  : primaryStatus === "profiled" || primaryStatus === "approved"
                     ? "Your account has been linked. Refresh the page if your loans are not visible yet."
                     : "Here is the status of your account link request."
               : "Enter your account number to link your loan account to your email address. We’ll show the status of your request after you submit."}
@@ -305,8 +297,8 @@ export default function CustomerAccountLink({
 
           {hasPending && (
             <p className="text-xs text-muted">
-              Your request is pending approval. You’ll see your loans once
-              it’s approved.
+              Your request is pending approval. You’ll see your loans once it’s
+              approved.
             </p>
           )}
 
@@ -358,7 +350,12 @@ export default function CustomerAccountLink({
         </div>
       )}
 
-      {error && <p className="text-sm text-danger">{error}</p>}
+      {error && (
+        <p className="text-sm text-danger flex items-center gap-1">
+          <TriangleAlert />
+          {error}
+        </p>
+      )}
       {/* {successMsg && <p className="text-sm text-success">{successMsg}</p>} */}
     </div>
   );

@@ -1,18 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { authApi, RemoteApiError } from "@/lib/auth-api";
-const schema = z.object({ email: z.string().email(), purpose: z.literal("registration") });
+
+const schema = z.object({
+  email: z.string().email(),
+  // registration | login | admin_login (extend as needed)
+  purpose: z.enum(["registration", "login", "admin_login"]),
+});
+
 export async function POST(req: NextRequest) {
-  const parsed = schema.safeParse(await req.json());
-  if (!parsed.success)
+  const body = await req.json().catch(() => null);
+  const parsed = schema.safeParse(body);
+
+  if (!parsed.success) {
     return NextResponse.json(
-      { success: false, message: "Email is required." },
+      {
+        success: false,
+        message: "Valid email and purpose are required.",
+        issues: parsed.error.flatten(),
+      },
       { status: 400 },
     );
+  }
+
+  const email = parsed.data.email.trim().toLowerCase();
+  const purpose = parsed.data.purpose;
+
   try {
-    return NextResponse.json(
-      await authApi.resendOtp(parsed.data.email.toLowerCase(), parsed.data.purpose),
-    );
+    const data = await authApi.resendOtp(email, purpose);
+    return NextResponse.json({
+      success: true,
+      ...data,
+    });
   } catch (error) {
     const status = error instanceof RemoteApiError ? error.status : 500;
     return NextResponse.json(

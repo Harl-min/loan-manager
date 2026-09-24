@@ -5,93 +5,44 @@ import { authApi, RemoteApiError } from "@/lib/auth-api";
 const schema = z.object({
   email: z.string().email(),
   otp_code: z.string().regex(/^\d{6}$/, "OTP must be 6 digits"),
-  purpose: z.literal("registration"),
+  purpose: z.literal("registration").default("registration"),
+  /** true when verifying an admin registration */
+  isAdmin: z.boolean().optional().default(false),
 });
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
+  const parsed = schema.safeParse(await req.json().catch(() => null));
 
-    const parsed = schema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            parsed.error.issues[0]?.message ??
-            "Email and OTP are required.",
-        },
-        { status: 400 },
-      );
-    }
-
-    const { email, otp_code, purpose } = parsed.data;
-
-    console.log("=================================");
-    console.log("REGISTRATION OTP VERIFICATION");
-    console.log("=================================");
-    console.log("Email:", email);
-    console.log("OTP:", otp_code);
-    console.log("Purpose:", purpose);
-
-    const response = await authApi.verifyRegistrationOtp(
-      email.toLowerCase(),
-      otp_code,
-      purpose,
-    );
-
-    console.log("Registration OTP API response:", response);
-
+  if (!parsed.success) {
     return NextResponse.json(
-      {
-        success: true,
-        ...response,
-      },
-      { status: 200 },
+      { success: false, message: "Email and OTP are required." },
+      { status: 400 },
     );
+  }
+
+  const email = parsed.data.email.trim().toLowerCase();
+  const otp = parsed.data.otp_code;
+  const purpose = parsed.data.purpose;
+  const isAdmin = parsed.data.isAdmin;
+
+  try {
+    const data = isAdmin
+      ? await authApi.verifyAdminRegistrationOtp(email, otp, purpose)
+      : await authApi.verifyRegistrationOtp(email, otp, purpose);
+
+    return NextResponse.json({
+      success: true,
+      ...data,
+    });
   } catch (error) {
-    console.error(
-      "Registration OTP verification failed:",
-      error,
-    );
-
-    /*
-     * IMPORTANT:
-     * This is a normal API route, NOT NextAuth authorize().
-     *
-     * Therefore, do NOT throw the error here.
-     * Return the backend error message to the browser.
-     */
-
-    if (error instanceof RemoteApiError) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: error.message,
-        },
-        {
-          status: error.status || 400,
-        },
-      );
-    }
-
-    if (error instanceof Error) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: error.message,
-        },
-        { status: 500 },
-      );
-    }
-
+    const status = error instanceof RemoteApiError ? error.status : 500;
     return NextResponse.json(
       {
         success: false,
-        message: "Unable to verify OTP. Please try again.",
+        message:
+          error instanceof Error ? error.message : "Unable to verify OTP.",
       },
-      { status: 500 },
+      { status },
     );
   }
 }

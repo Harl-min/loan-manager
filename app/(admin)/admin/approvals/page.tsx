@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 
 import { Card } from "@/components/ui/Card";
@@ -67,8 +61,7 @@ function statusClass(status: string) {
   const s = (status || "").toUpperCase();
   if (s === "PENDING") return "bg-warning/10 text-warning";
   if (s === "INVALID") return "bg-danger/10 text-danger";
-  if (s === "PROFILED" || s === "APPROVED")
-    return "bg-success/10 text-success";
+  if (s === "PROFILED" || s === "APPROVED") return "bg-success/10 text-success";
   return "bg-muted/10 text-muted";
 }
 
@@ -140,7 +133,7 @@ export default function PendingAssociationsTable() {
 
         const list: AssociationRecord[] = Array.isArray(data)
           ? data
-          : data?.records ?? data?.data ?? data?.customers ?? [];
+          : (data?.records ?? data?.data ?? data?.customers ?? []);
 
         setRows(list);
         setCurrentPage(1);
@@ -163,25 +156,25 @@ export default function PendingAssociationsTable() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authStatus, accessToken]);
 
-const openActivateModal = (
-  row: AssociationRecord,
-  mode: "activate" | "deactivate" = "activate",
-) => {
-  setSelectedUser(associationToCustomerUser(row));
-  setModalMode(mode);
-  setShowActivateModal(true);
-};
+  const openActivateModal = (
+    row: AssociationRecord,
+    mode: "activate" | "deactivate" = "activate",
+  ) => {
+    setSelectedUser(associationToCustomerUser(row));
+    setModalMode(mode);
+    setShowActivateModal(true);
+  };
 
-// state
-const [modalMode, setModalMode] = useState<"activate" | "deactivate">(
-  "activate",
-);
+  // state
+  const [modalMode, setModalMode] = useState<"activate" | "deactivate">(
+    "activate",
+  );
 
-const closeActivateModal = () => {
-  setShowActivateModal(false);
-  setSelectedUser(null);
-  setModalMode("activate");
-};
+  const closeActivateModal = () => {
+    setShowActivateModal(false);
+    setSelectedUser(null);
+    setModalMode("activate");
+  };
 
   // const closeActivateModal = () => {
   //   setShowActivateModal(false);
@@ -204,8 +197,7 @@ const closeActivateModal = () => {
         (row.submitted_by || "").toLowerCase().includes(search);
 
       const status = (row.status || "").toUpperCase();
-      const matchesStatus =
-        statusFilter === "ALL" || status === statusFilter;
+      const matchesStatus = statusFilter === "ALL" || status === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
@@ -226,7 +218,7 @@ const closeActivateModal = () => {
     <div>
       <div className="mb-4 flex items-start justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-primary">Associations</h2>
+          <h2 className="text-lg font-semibold text-primary">Approvals</h2>
           <p className="mt-0.5 text-sm text-muted">
             Customer account link requests and their review status.
           </p>
@@ -334,10 +326,7 @@ const closeActivateModal = () => {
             <tbody>
               {rows == null && (
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="px-6 py-6 text-center text-muted"
-                  >
+                  <td colSpan={6} className="px-6 py-6 text-center text-muted">
                     Loading associations…
                   </td>
                 </tr>
@@ -345,19 +334,17 @@ const closeActivateModal = () => {
 
               {rows && filteredRows.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="px-6 py-6 text-center text-muted"
-                  >
+                  <td colSpan={6} className="px-6 py-6 text-center text-muted">
                     No associations found.
                   </td>
                 </tr>
               )}
 
-        {paginatedRows.map((row) => {
-  const status = (row.status || "").toUpperCase();
-  const isPending = status === "PENDING";
-  const isProfiled = status === "PROFILED" || status === "APPROVED";
+              {paginatedRows.map((row) => {
+                const status = (row.status || "").toUpperCase();
+                const isPending = status === "PENDING";
+                const isProfiled =
+                  status === "PROFILED" || status === "APPROVED";
                 return (
                   <tr key={row.id} className="border-t border-border">
                     <td className="px-6 py-3">
@@ -393,32 +380,32 @@ const closeActivateModal = () => {
                     </td>
 
                     <td className="px-6 py-3">
-        <div className="flex justify-end gap-2">
-          {isPending && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-success/40 text-success hover:bg-success/10"
-              trackLabel={`Activate association:${row.id}`}
-              onClick={() => openActivateModal(row, "activate")}
-            >
-              Activate
-            </Button>
-          )}
+                      <div className="flex justify-end gap-2">
+                        {isPending && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-success/40 text-success hover:bg-success/10"
+                            trackLabel={`Activate association:${row.id}`}
+                            onClick={() => openActivateModal(row, "activate")}
+                          >
+                            Activate
+                          </Button>
+                        )}
 
-          {isProfiled && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-danger/40 text-danger hover:bg-danger/10"
-              trackLabel={`Deactivate association:${row.id}`}
-              onClick={() => openActivateModal(row, "deactivate")}
-            >
-              Deactivate
-            </Button>
-          )}
-        </div>
-      </td>
+                        {isProfiled && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-danger/40 text-danger hover:bg-danger/10"
+                            trackLabel={`Deactivate association:${row.id}`}
+                            onClick={() => openActivateModal(row, "deactivate")}
+                          >
+                            Deactivate
+                          </Button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -446,9 +433,7 @@ const closeActivateModal = () => {
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() =>
-                  setCurrentPage((page) => Math.max(1, page - 1))
-                }
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                 disabled={currentPage === 1}
                 className="rounded-md border border-border px-3 py-1.5 text-sm disabled:opacity-40"
               >
@@ -488,19 +473,19 @@ const closeActivateModal = () => {
         )}
       </Card>
 
-  {showActivateModal && selectedUser && (
-  <ActivateUserModal
-    user={selectedUser}
-    mode={modalMode}
-    lockAccountNumber
-    autoVerify={modalMode === "activate"}
-    onClose={closeActivateModal}
-    onActivated={() => {
-      closeActivateModal();
-      refresh();
-    }}
-  />
-)}
+      {showActivateModal && selectedUser && (
+        <ActivateUserModal
+          user={selectedUser}
+          mode={modalMode}
+          lockAccountNumber
+          autoVerify={modalMode === "activate"}
+          onClose={closeActivateModal}
+          onActivated={() => {
+            closeActivateModal();
+            refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -546,6 +531,7 @@ function ActivateUserModal({
     customer_no: string;
     customer_name: string;
     addr_line_1?: string | null;
+    corebank_email?: string | null;
     city?: string | null;
     state?: string | null;
     country?: string | null;
@@ -606,8 +592,7 @@ function ActivateUserModal({
       cache: "no-store",
     });
 
-    const associationData =
-      await associationResponse.json().catch(() => null);
+    const associationData = await associationResponse.json().catch(() => null);
     console.log("association by email response:", associationData);
 
     if (!associationResponse.ok) {
@@ -673,9 +658,7 @@ function ActivateUserModal({
     const data = await response.json().catch(() => null);
     if (!response.ok || data?.success === false) {
       throw new Error(
-        data?.detail ||
-          data?.message ||
-          "Unable to approve this association.",
+        data?.detail || data?.message || "Unable to approve this association.",
       );
     }
     return data;
@@ -694,8 +677,7 @@ function ActivateUserModal({
           open: true,
           type: "success",
           title: "Activation successful",
-          message:
-            data?.message || "Profile approved and linked successfully.",
+          message: data?.message || "Profile approved and linked successfully.",
           buttonText: "Done",
         });
       } catch (err: any) {
@@ -810,9 +792,7 @@ function ActivateUserModal({
         setAssociation(record);
       })
       .catch((err: any) => {
-        setError(
-          err?.message || "Unable to load association details.",
-        );
+        setError(err?.message || "Unable to load association details.");
         setAssociation(null);
       })
       .finally(() => {
@@ -971,11 +951,7 @@ function ActivateUserModal({
 
   const inputLocked = lockAccountNumber && Boolean(user.account_number);
   const busy =
-    verifying ||
-    activating ||
-    invalidating ||
-    deactivating ||
-    loadingDetails;
+    verifying || activating || invalidating || deactivating || loadingDetails;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
@@ -1108,7 +1084,17 @@ function ActivateUserModal({
                   </div>
                   <div>
                     <div className="text-xs text-muted">Status</div>
-                    <div className="mt-1 text-sm font-medium text-warning">
+                    <div
+                      className={`mt-1 text-sm font-medium ${
+                        association.status === "PROFILED"
+                          ? "text-success"
+                          : association.status === "INVALID"
+                            ? "text-danger"
+                            : association.status === "PENDING"
+                              ? "text-warning"
+                              : "text-muted"
+                      }`}
+                    >
                       {association.status || association.ref_desc || "—"}
                     </div>
                   </div>
@@ -1119,9 +1105,9 @@ function ActivateUserModal({
                     </div>
                   </div>
                   <div className="sm:col-span-2">
-                    <div className="text-xs text-muted">Email</div>
+                    <div className="text-xs text-muted">Registered Email</div>
                     <div className="mt-1 break-all text-sm font-medium text-foreground">
-                      {association.email || "—"}
+                      {association.corebank_email || "—"}
                     </div>
                   </div>
                   <div>

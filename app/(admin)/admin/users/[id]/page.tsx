@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-
+import { useSession } from "next-auth/react";
 import { Card } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -44,49 +44,108 @@ type CustomerAccount = {
   statistics: LoanStatistics | null;
 };
 
+const ACCT_URL = process.env.NEXT_PUBLIC_NEXT_DATA_AUTH_URL;
+
 export default function CustomerDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
 
-  // customer_no comes from the URL
   const customerNo = decodeURIComponent(params.id);
 
-  // Optional fields that were passed from the table (so the form is pre-filled)
+  // Seed from query (table), then overwrite from list API when available
   const [name, setName] = useState(searchParams.get("name") ?? "");
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [phone, setPhone] = useState(searchParams.get("phone") ?? "");
   const [mailingAddress, setMailingAddress] = useState(
     searchParams.get("address") ?? "",
   );
+  const [profileLoading, setProfileLoading] = useState(true);
 
   const [accounts, setAccounts] = useState<CustomerAccount[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [accountsError, setAccountsError] = useState(false);
 
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+  const getAccessToken = () =>
+    ((session as any)?.accessToken ||
+      (session as any)?.access_token ||
+      undefined) as string | undefined;
+
   // ----------------------------------------------------------
-  // Load loan accounts using the customer number
-  // (no Prisma call)
+  // Load customer profile: GET .../customers/list?search={customerNo}
+  // ----------------------------------------------------------
+  async function loadCustomerProfile() {
+    const token = getAccessToken();
+    if (!token || !customerNo) {
+      setProfileLoading(false);
+      return;
+    }
+
+    setProfileLoading(true);
+    try {
+      const url =
+        `${ACCT_URL}api/v1/admin/customers/list` +
+        `?search=${encodeURIComponent(customerNo)}`;
+
+      console.log("GET customer by search:", url);
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+      });
+
+      const data = await response.json().catch(() => null);
+      console.log("customers/list?search= response:", data);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail || data?.message || "Failed to load customer",
+        );
+      }
+
+      const list = data?.customers ?? [];
+      const match =
+        list.find(
+          (c: any) =>
+            String(c.customer_no || "") === String(customerNo),
+        ) ?? list[0];
+
+      if (match) {
+        setName(match.full_name ?? "");
+        setEmail(match.email ?? "");
+        setPhone(match.phone_number ?? "");
+        // address not in this API response — leave query seed if any
+      }
+    } catch (error) {
+      console.error("Failed to load customer profile:", error);
+      // keep query-param seeds; do not block accounts
+    } finally {
+      setProfileLoading(false);
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Loan accounts (unchanged)
   // ----------------------------------------------------------
   async function loadAccounts() {
     setAccountsLoading(true);
     setAccountsError(false);
-
     try {
-      // Adjust this endpoint to accept the customer number
-      // Example: /api/admin/customer-accounts?customerNo=...
       const response = await fetch(
         `/api/admin/customer-accounts?custNum=${encodeURIComponent(customerNo)}`,
-        {
-          method: "GET",
-          cache: "no-store",
-        },
+        { method: "GET", cache: "no-store" },
       );
-
       if (!response.ok) {
         throw new Error(`Account API returned ${response.status}`);
       }
-
       const data = await response.json();
       setAccounts(data.accounts ?? []);
     } catch (error) {
@@ -99,20 +158,18 @@ export default function CustomerDetailPage() {
   }
 
   useEffect(() => {
+    if (!session) return;
+    loadCustomerProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerNo, session]);
+
+  useEffect(() => {
     loadAccounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerNo]);
 
-  // ----------------------------------------------------------
-  // Save / Block will come later – just placeholders for now
-  // ----------------------------------------------------------
-  const [saving, setSaving] = useState(false);
-  const [savedMsg, setSavedMsg] = useState<string | null>(null);
-
   async function saveProfile() {
-    // TODO: implement when the new save API is ready
     setSaving(true);
-    // await api.patch(...)
     setSaving(false);
     setSavedMsg("Profile saved.");
     setTimeout(() => setSavedMsg(null), 2000);
@@ -120,7 +177,6 @@ export default function CustomerDetailPage() {
 
   return (
     <div>
-      {/* BACK */}
       <button
         data-track-label="Back to users"
         onClick={() => router.push("/admin/users")}
@@ -129,11 +185,10 @@ export default function CustomerDetailPage() {
         ← Back to users
       </button>
 
-      {/* HEADER – no loading state, no 403 */}
       <div className="mt-2 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-primary">
-            {name || "Customer"}
+            {name || (profileLoading ? "Loading…" : "Customer")}
           </h1>
           <p className="text-sm text-muted">
             Customer No. {customerNo}
@@ -142,36 +197,28 @@ export default function CustomerDetailPage() {
         </div>
       </div>
 
-      {/* CUSTOMER PROFILE – pre-filled from the object that was passed */}
       <Card className="mt-6">
         <h2 className="font-semibold text-primary">Customer Profile</h2>
-
         <div className="mt-4 grid grid-cols-2 gap-4">
           <Input
             label="Full name"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            disabled={profileLoading}
           />
-
           <Input
             label="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            disabled={profileLoading}
           />
-
           <Input
             label="Phone"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
+            disabled={profileLoading}
           />
-
-          {/* <Input
-            label="Mailing address"
-            value={mailingAddress}
-            onChange={(e) => setMailingAddress(e.target.value)}
-          /> */}
         </div>
-
         <div className="mt-4 flex items-center gap-3">
           <Button
             trackLabel="Save customer profile"
@@ -180,7 +227,6 @@ export default function CustomerDetailPage() {
           >
             {saving ? "Saving…" : "Save changes"}
           </Button>
-
           {savedMsg && (
             <span className="text-sm text-success">{savedMsg}</span>
           )}

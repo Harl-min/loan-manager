@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 
@@ -14,74 +14,80 @@ type StatusDialogState = {
   title?: string;
   message?: string;
   buttonText?: string;
-  onClose?: () => void;
+  goToApp?: boolean;
 };
+
+const EMAIL_KEY = "verify_login_email";
+const ADMIN_KEY = "verify_login_admin";
 
 function VerifyEmailForm() {
   const router = useRouter();
   const params = useSearchParams();
 
-  const email = params.get("email") ?? "";
+  // Prefer URL, then sessionStorage (set on login redirect)
+  const email = useMemo(() => {
+    const fromUrl = params.get("email")?.trim() ?? "";
+    if (fromUrl) {
+      try {
+        return decodeURIComponent(fromUrl).toLowerCase();
+      } catch {
+        return fromUrl.toLowerCase();
+      }
+    }
+    if (typeof window !== "undefined") {
+      return (sessionStorage.getItem(EMAIL_KEY) || "").toLowerCase();
+    }
+    return "";
+  }, [params]);
+
+  const isAdmin = useMemo(() => {
+    if (params.get("admin") === "1") return true;
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem(ADMIN_KEY) === "1";
+    }
+    return false;
+  }, [params]);
+
+  // Persist so refresh / client navigation keeps email
+  useEffect(() => {
+    if (email) sessionStorage.setItem(EMAIL_KEY, email);
+    sessionStorage.setItem(ADMIN_KEY, isAdmin ? "1" : "0");
+  }, [email, isAdmin]);
 
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
-  const [countdown, setCountdown] = useState(180);
-
-  const [statusDialog, setStatusDialog] =
-    useState<StatusDialogState>({
-      open: false,
-      type: "success",
-    });
+  const [countdown, setCountdown] = useState(1);
+  const [statusDialog, setStatusDialog] = useState<StatusDialogState>({
+    open: false,
+    type: "success",
+  });
 
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
+  const code = digits.join("");
 
-  // ------------------------------------------------------------
-  // OTP COUNTDOWN
-  // ------------------------------------------------------------
   useEffect(() => {
     if (countdown <= 0) return;
-
-    const timer = setInterval(() => {
-      setCountdown((prev) => Math.max(prev - 1, 0));
-    }, 1000);
-
-    return () => clearInterval(timer);
+    const t = setInterval(
+      () => setCountdown((s) => Math.max(s - 1, 0)),
+      1000,
+    );
+    return () => clearInterval(t);
   }, [countdown]);
 
-  // ------------------------------------------------------------
-  // OTP INPUT
-  // ------------------------------------------------------------
   function updateDigit(index: number, value: string) {
     if (!/^\d?$/.test(value)) return;
-
     const next = [...digits];
     next[index] = value;
-
     setDigits(next);
-
-    if (value && index < 5) {
-      inputsRef.current[index + 1]?.focus();
-    }
+    if (value && index < 5) inputsRef.current[index + 1]?.focus();
   }
 
   function handleKeyDown(
     index: number,
     e: React.KeyboardEvent<HTMLInputElement>,
   ) {
-    if (
-      e.key === "Backspace" &&
-      !digits[index] &&
-      index > 0
-    ) {
+    if (e.key === "Backspace" && !digits[index] && index > 0) {
       inputsRef.current[index - 1]?.focus();
-    }
-
-    if (e.key === "ArrowLeft" && index > 0) {
-      inputsRef.current[index - 1]?.focus();
-    }
-
-    if (e.key === "ArrowRight" && index < 5) {
-      inputsRef.current[index + 1]?.focus();
     }
   }
 
@@ -90,45 +96,25 @@ function VerifyEmailForm() {
     e: React.ClipboardEvent<HTMLInputElement>,
   ) {
     e.preventDefault();
-
     const pasted = e.clipboardData
       .getData("text")
       .replace(/\D/g, "")
       .slice(0, 6);
-
     if (!pasted) return;
-
     const next = [...digits];
-
-    pasted.split("").forEach((digit, offset) => {
-      if (index + offset < 6) {
-        next[index + offset] = digit;
-      }
+    pasted.split("").forEach((d, i) => {
+      if (index + i < 6) next[index + i] = d;
     });
-
     setDigits(next);
-
-    const nextIndex = Math.min(index + pasted.length, 5);
-    inputsRef.current[nextIndex]?.focus();
+    inputsRef.current[Math.min(index + pasted.length, 5)]?.focus();
   }
 
-  const code = digits.join("");
-
-  // ------------------------------------------------------------
-  // COUNTDOWN FORMAT
-  // ------------------------------------------------------------
   function formatCountdown(seconds: number) {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-
-    return `${minutes}:${remainingSeconds
-      .toString()
-      .padStart(2, "0")}`;
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
   }
 
-  // ------------------------------------------------------------
-  // VERIFY OTP
-  // ------------------------------------------------------------
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
 
@@ -140,82 +126,69 @@ function VerifyEmailForm() {
         message: "Please enter the complete 6-digit verification code.",
         buttonText: "Close",
       });
-
       return;
     }
 
-    if (!email.trim()) {
+    const verifyEmail = email.trim().toLowerCase();
+    if (!verifyEmail) {
       setStatusDialog({
         open: true,
         type: "error",
         title: "Verification Error",
-        message: "Your email address is missing. Please restart the verification process.",
+        message: "Your email address is missing. Please restart login.",
         buttonText: "Close",
       });
-
       return;
     }
 
     setLoading(true);
-
     try {
+      console.log("Verify OTP payload:", {
+        email: verifyEmail,
+        loginType: isAdmin ? "admin" : "customer",
+        otpLength: code.length,
+      });
+
       const result = await signIn("credentials", {
-        email: email.trim().toLowerCase(),
+        email: verifyEmail,
         otp: code,
-        purpose: "registration",
+        purpose: "login",
+        loginType: isAdmin ? "admin" : "customer",
         redirect: false,
       });
 
-      console.log("=================================");
-      console.log("NextAuth signIn result");
-      console.log("=================================");
-      console.log(result);
+      console.log("signIn result:", result);
 
-      // ----------------------------------------------------------
-      // NEXTAUTH ERROR
-      // ----------------------------------------------------------
       if (!result || result.error) {
-        const errorMessage =
-          result?.error ||
-          "That code didn't work. Please try again.";
-
-        console.error("OTP verification failed:", errorMessage);
-
         setStatusDialog({
           open: true,
           type: "error",
           title: "Verification Failed",
-          message: errorMessage,
+          message: result?.error || "That code didn't work. Please try again.",
           buttonText: "Close",
         });
-
         return;
       }
 
-      // ----------------------------------------------------------
-      // SUCCESS
-      // ----------------------------------------------------------
       setStatusDialog({
         open: true,
         type: "success",
         title: "Login successful",
-        message:
-          "Your email has been verified successfully. You can now access your account.",
-        buttonText: "Continue to Dashboard",
+        message: isAdmin
+          ? "You are signed in as an administrator."
+          : "Your email has been verified. You can access your account.",
+        buttonText: isAdmin ? "Continue to Admin" : "Continue to Dashboard",
+        goToApp: true,
       });
     } catch (err: unknown) {
-      console.error("OTP verification exception:", err);
-
-      const message =
-        err instanceof Error
-          ? err.message
-          : "That code didn't work. Please try again.";
-
       setStatusDialog({
         open: true,
         type: "error",
         title: "Verification Failed",
-        message,
+        message:
+          err instanceof Error
+            ? err.message
+            : "That code didn't work. Please try again.",
         buttonText: "Close",
       });
     } finally {
@@ -223,188 +196,150 @@ function VerifyEmailForm() {
     }
   }
 
-  // ------------------------------------------------------------
-  // RESEND OTP
-  // ------------------------------------------------------------
   async function resend() {
     if (countdown > 0 || loading) return;
 
-    setLoading(true);
+    const verifyEmail = email.trim().toLowerCase();
+    if (!verifyEmail) {
+      setStatusDialog({
+        open: true,
+        type: "error",
+        title: "Missing email",
+        message: "Email is missing. Please log in again.",
+        buttonText: "Close",
+      });
+      return;
+    }
 
+    setLoading(true);
     try {
-      const response = await fetch("/api/auth/otp/resend", {
+      // Keep resend off the NextAuth catch-all
+      const endpoint = isAdmin ? "/api/auth/otp/resend" : "/api/auth/otp/resend";
+
+      const response = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
+          email: verifyEmail,
           purpose: "login",
         }),
       });
 
-      const contentType =
-        response.headers.get("content-type") ?? "";
-
-      let data: any = null;
-
-      if (contentType.includes("application/json")) {
-        data = await response.json().catch(() => null);
-      } else {
-        const text = await response.text();
-        data = {
-          message: text,
-        };
-      }
-
-      console.log("OTP resend response:", {
-        status: response.status,
-        data,
-      });
-
+      const data = await response.json().catch(() => null);
       if (!response.ok) {
         throw new Error(
-          data?.message ||
-            data?.error?.message ||
-            data?.error ||
-            "Unable to resend the code. Please try again.",
+          data?.message || data?.error || "Unable to resend the code.",
         );
       }
 
-      // Clear OTP fields
       setDigits(["", "", "", "", "", ""]);
-
-      // Restart countdown
-      setCountdown(180);
-
-      // Focus first input
+      setCountdown(1);
       inputsRef.current[0]?.focus();
 
       setStatusDialog({
         open: true,
         type: "success",
         title: "Code Sent",
-        message:
-          "A new verification code has been sent to your email.",
+        message: "A new verification code has been sent to your email.",
         buttonText: "Continue",
+        goToApp: false,
       });
     } catch (err: unknown) {
-      console.error("OTP resend failed:", err);
-
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Unable to resend the code. Please try again.";
-
       setStatusDialog({
         open: true,
         type: "error",
         title: "Unable to Resend Code",
-        message,
+        message:
+          err instanceof Error
+            ? err.message
+            : "Unable to resend the code. Please try again.",
         buttonText: "Close",
-        onClose: () => {
-    setStatusDialog((prev) => ({ ...prev, open: false }));
-    router.push("/login");
-  },
       });
     } finally {
       setLoading(false);
     }
   }
 
-  // ------------------------------------------------------------
-  // CLOSE STATUS DIALOG
-  // ------------------------------------------------------------
   function closeStatusDialog() {
-    const wasSuccess = statusDialog.type === "success";
+    const go = statusDialog.goToApp;
+    setStatusDialog((p) => ({ ...p, open: false, goToApp: false }));
+    if (!go) return;
 
-    setStatusDialog((prev) => ({
-      ...prev,
-      open: false,
-    }));
+    sessionStorage.removeItem(EMAIL_KEY);
+    sessionStorage.removeItem(ADMIN_KEY);
 
-    if (wasSuccess) {
+    if (isAdmin) {
+      router.push("/admin/users");
+      router.refresh();
+    } else {
       router.push("/dashboard");
+      router.refresh();
     }
   }
 
   return (
     <div>
-      {/* Header */}
       <div className="mb-8 text-center">
         <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-brand bg-primary text-primary-foreground">
           ✉
         </div>
-
         <h1 className="text-2xl font-bold text-foreground">
-          Verify your login email
+          {isAdmin ? "Verify admin login email" : "Verify your login email"}
         </h1>
-
         <p className="mt-1 text-sm text-muted">
-          We sent a code to {email || "your email"}
+          We sent a code to{" "}
+          <span className="font-medium text-foreground">
+            {email || "your email"}
+          </span>
         </p>
       </div>
 
-      {/* OTP Card */}
       <Card>
         <form onSubmit={handleVerify}>
-          {/* OTP Inputs */}
           <div className="mb-6 flex justify-center gap-2">
             {digits.map((digit, index) => (
               <input
                 key={index}
-                ref={(element) => {
-                  inputsRef.current[index] = element;
+                ref={(el) => {
+                  inputsRef.current[index] = el;
                 }}
                 value={digit}
-                onChange={(e) =>
-                  updateDigit(index, e.target.value)
-                }
-                onKeyDown={(e) =>
-                  handleKeyDown(index, e)
-                }
-                onPaste={(e) =>
-                  handlePaste(index, e)
-                }
+                onChange={(e) => updateDigit(index, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(index, e)}
+                onPaste={(e) => handlePaste(index, e)}
                 inputMode="numeric"
                 maxLength={1}
-                autoComplete={
-                  index === 0 ? "one-time-code" : "off"
-                }
+                autoComplete={index === 0 ? "one-time-code" : "off"}
                 className="h-12 w-11 rounded-brand border border-border text-center text-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             ))}
           </div>
 
-          {/* Verify Button */}
           <Button
             type="submit"
             trackLabel="Verify"
             className="w-full"
-            disabled={loading || code.length < 6}
+            disabled={loading || code.length < 6 || !email}
           >
             {loading ? "Verifying…" : "Verify"}
           </Button>
         </form>
 
-        {/* Countdown */}
         <p className="mt-3 text-center text-sm text-muted">
-          OTP received expires in{" "}
+          OTP expires in{" "}
           <span className="font-semibold text-foreground">
             {formatCountdown(countdown)}
           </span>
         </p>
 
-        {/* Resend */}
         <p className="mt-2 text-center text-sm text-muted">
           Didn&apos;t receive the code?{" "}
           <button
             type="button"
-            data-track-label="Resend code"
             onClick={resend}
-            disabled={countdown > 0 || loading}
+            disabled={countdown > 0 || loading || !email}
             className={`font-semibold ${
-              countdown > 0 || loading
+              countdown > 0 || loading || !email
                 ? "cursor-not-allowed text-muted"
                 : "text-foreground hover:underline"
             }`}
@@ -414,7 +349,6 @@ function VerifyEmailForm() {
         </p>
       </Card>
 
-      {/* Generic Success/Error Dialog */}
       <StatusDialog
         open={statusDialog.open}
         type={statusDialog.type}
@@ -429,7 +363,7 @@ function VerifyEmailForm() {
 
 export default function VerifyEmailLoginPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<p className="text-sm text-muted">Loading…</p>}>
       <VerifyEmailForm />
     </Suspense>
   );

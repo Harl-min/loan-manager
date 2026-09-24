@@ -6,9 +6,11 @@ export const AUTH_ENDPOINTS = {
   refresh: "/api/v1/auth/refresh",
   register: "/api/v1/auth/register",
   verifyOtp: "/api/v1/auth/verify-otp",
+  adminVerifyOtp: "/api/v1/admin/verify-otp",
   login: "/api/v1/auth/login",
   adminLogin: "/api/v1/admin/login",
   verifyLoginOtp: "/api/v1/auth/verify-login-otp",
+  adminVerifyLoginOtp: "/api/v1/admin/verify-login-otp",
   logout: "/api/v1/auth/logout",
   profile: "/api/v1/auth/profile",
   generateOtp: "/api/v1/otp/generate",
@@ -133,29 +135,37 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, otp_code: otp, purpose }),
     }),
+      verifyAdminRegistrationOtp: (email: string, otp: string, purpose: string) =>
+    remoteAuth(AUTH_ENDPOINTS.adminVerifyOtp, {
+      method: "POST",
+      body: JSON.stringify({ email, otp_code: otp, purpose }),
+    }),
   login: (email: string, password: string) =>
     remoteAuth(AUTH_ENDPOINTS.login, {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
-    adminLogin: (email: string, password: string) =>
-  remoteAuth(AUTH_ENDPOINTS.adminLogin, {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  }),
+  adminLogin: (email: string, password: string) =>
+    remoteAuth(AUTH_ENDPOINTS.adminLogin, {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
   verifyLoginOtp: (email: string, otp: string, purpose: string) =>
     remoteAuth(AUTH_ENDPOINTS.verifyLoginOtp, {
       method: "POST",
       body: JSON.stringify({ email, otp_code: otp, purpose }),
     }),
+    adminVerifyLoginOtp: (email: string, otp: string) =>
+    remoteAuth(AUTH_ENDPOINTS.adminVerifyLoginOtp, {
+      method: "POST",
+      body: JSON.stringify({ email, otp_code: otp, purpose: "login" }),
+    }),
   logout: (accessToken: string, refreshToken?: string) =>
-  remoteAuth(AUTH_ENDPOINTS.logout, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify(
-      refreshToken ? { refresh_token: refreshToken } : {},
-    ),
-  }),
+    remoteAuth(AUTH_ENDPOINTS.logout, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(refreshToken ? { refresh_token: refreshToken } : {}),
+    }),
   profile: (accessToken: string) =>
     remoteAuth(AUTH_ENDPOINTS.profile, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -196,12 +206,8 @@ function text(source: Json, names: string[]) {
   return undefined;
 }
 
-export function toRemoteSession(
-  response: unknown,
-  fallbackEmail: string,
-) {
+export function toRemoteSession(response: unknown, fallbackEmail: string) {
   const data = unwrap(response);
-
   const tokens = unwrap(data.tokens ?? data.token ?? data);
   const user = unwrap(data.user ?? data.profile ?? data);
 
@@ -217,36 +223,31 @@ export function toRemoteSession(
   }
 
   const email =
-    text(user, ["email"]) ??
-    text(data, ["email"]) ??
-    fallbackEmail;
+    text(user, ["email"]) ?? text(data, ["email"]) ?? fallbackEmail;
 
   const id =
     text(user, ["id", "user_id", "userId"]) ??
     text(data, ["id", "user_id", "userId"]) ??
     email;
 
-  // Read full_name from BOTH user object and top-level data
   const fullName =
     text(user, ["full_name", "fullName", "name"]) ??
     text(data, ["full_name", "fullName", "name"]);
 
-  // Never silently fall back to email unless full_name is truly missing
-  const name = fullName && fullName !== email ? fullName : fullName ?? email;
+  const name =
+    fullName && fullName !== email ? fullName : fullName ?? email;
 
-  console.log("toRemoteSession name resolution:", {
-    fullName,
-    name,
-    email,
-    rawUser: user,
-    rawData: data,
-  });
+  const rawRole = (
+    text(user, ["role", "userRole"]) ??
+    text(data, ["role", "userRole"]) ??
+    ""
+  ).toUpperCase();
 
-  const rawRole = text(user, ["role", "userRole"])?.toUpperCase()
-    ?? text(data, ["role", "userRole"])?.toUpperCase();
-
+  // admin | super_admin | ADMIN → session role "admin"
   const role: "admin" | "BORROWER" | undefined =
-    rawRole === "ADMIN"
+    rawRole === "ADMIN" ||
+    rawRole === "SUPER_ADMIN" ||
+    rawRole === "SUPERADMIN"
       ? "admin"
       : rawRole === "BORROWER"
         ? "BORROWER"

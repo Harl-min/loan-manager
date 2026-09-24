@@ -2,21 +2,21 @@
 
 import { useEffect, useRef } from "react";
 import { signOut, useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
 
-const IDLE_TIMEOUT = 300000; // 5 minutes in milliseconds
+const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 export default function IdleTimeout() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
+  const pathname = usePathname();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Only run when the user is signed in
     if (status !== "authenticated") return;
 
-    const role = (session?.user as any)?.role;
-    const isAdmin = role === "admin";
-
-    const callbackUrl = isAdmin ? "/login?admin=1" : "/login";
+    // Path is more reliable than role for customer vs admin
+    const isAdminArea = pathname.startsWith("/admin");
+    const callbackUrl = isAdminArea ? "/login?admin=1" : "/login";
 
     const clearTimer = () => {
       if (timerRef.current) {
@@ -53,7 +53,7 @@ export default function IdleTimeout() {
         window.removeEventListener(event, resetTimer);
       });
     };
-  }, [status, session?.user]);
+  }, [status, pathname]);
 
   return null;
 }
