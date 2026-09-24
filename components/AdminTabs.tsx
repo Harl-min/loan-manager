@@ -470,7 +470,7 @@ export default function AdminLoanDetailClient({
                         "text-sm font-semibold",
                         isCredit
                           ? "text-success"
-                          : "text-foreground"
+                          : "text-danger"
                       )}
                     >
                       {isCredit ? "+" : "-"}

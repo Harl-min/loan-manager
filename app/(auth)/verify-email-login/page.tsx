@@ -56,7 +56,7 @@ function VerifyEmailForm() {
 
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
-  const [countdown, setCountdown] = useState(1);
+  const [countdown, setCountdown] = useState(300);
   const [statusDialog, setStatusDialog] = useState<StatusDialogState>({
     open: false,
     type: "success",
@@ -233,7 +233,7 @@ function VerifyEmailForm() {
       }
 
       setDigits(["", "", "", "", "", ""]);
-      setCountdown(1);
+      setCountdown(300);
       inputsRef.current[0]?.focus();
 
       setStatusDialog({
