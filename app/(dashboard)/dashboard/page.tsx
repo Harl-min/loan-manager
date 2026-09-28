@@ -317,7 +317,7 @@ export default async function DashboardPage() {
           value={isLinked && dueNow !== null ? fmtCurrency(dueNow) : "—"}
         />
         <StatCard
-          label="Status"
+          label="Accounts"
           value={
             isLinked && statusLabel
               ? statusLabel

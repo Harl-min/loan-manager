@@ -557,7 +557,7 @@ export default function ManageUsersPage() {
         <div>
           <h1 className="text-2xl font-bold text-primary">Manage Users</h1>
           <p className="mt-1 text-sm text-muted">
-            Search and manage customers and admin accounts.
+            Search and manage customer and admin users.
           </p>
         </div>
         <Button

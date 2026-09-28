@@ -220,7 +220,7 @@ export default function PendingAssociationsTable() {
         <div>
           <h2 className="text-lg font-semibold text-primary">Approvals</h2>
           <p className="mt-0.5 text-sm text-muted">
-            Customer account link requests and their review status.
+            Customer user link requests and their review status.
           </p>
         </div>
       </div>
@@ -1034,7 +1034,7 @@ function ActivateUserModal({
                 {association && (
                   <p className="mt-1 text-xs text-foreground">
                     Click <strong>Activate</strong> to link this user, or
-                    invalidate below.
+                    reject below.
                   </p>
                 )}
               </form>
@@ -1059,7 +1059,7 @@ function ActivateUserModal({
                   <p className="text-xs text-muted">
                     {isDeactivate
                       ? "Confirm before deactivating this linked account."
-                      : "Confirm the information before activating or invalidating."}
+                      : "Confirm the information before activating or rejecting."}
                   </p>
                 </div>
 
@@ -1163,7 +1163,7 @@ function ActivateUserModal({
                     onClick={invalidateCustomer}
                     trackLabel={`Invalidate association:${association.id}`}
                   >
-                    {invalidating ? "Invalidating…" : "Invalidate user"}
+                    {invalidating ? "Rejecting…" : "Reject"}
                   </Button>
                 )}
               </>

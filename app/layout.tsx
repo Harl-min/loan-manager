@@ -4,6 +4,7 @@ import { brand, brandCssVariables } from "@/lib/brand";
 import SessionProvider from "@/components/SessionProvider";
 import ClickTracker from "@/components/ClickTracker";
 import IdleTimeout from "@/components/IdleTimeout";
+import DisableContextMenu from "@/components/DisableContextMenu";
 
 export const metadata: Metadata = {
   title: `${brand.name} — ${brand.tagline}`,
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-muted text-foreground antialiased">
         <SessionProvider>
           <IdleTimeout />
+          {/* <DisableContextMenu /> */}
           {children}
           <ClickTracker />
         </SessionProvider>
