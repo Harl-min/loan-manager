@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/Card";
 import { fmtCurrency, fmtDate } from "@/lib/format";
 import DownloadCsvButton from "@/components/DownloadCsvButton";

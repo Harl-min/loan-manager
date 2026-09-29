@@ -32,20 +32,6 @@ export default async function AdminLoanDetailPage({
     notFound();
   }
 
-  /*
-   * IMPORTANT:
-   *
-   * loanId is NOT a Prisma loan ID anymore.
-   *
-   * It is the account number coming directly
-   * from CustomerDetailPage.
-   *
-   * Example:
-   *
-   * /admin/users/123/loans/5000152687
-   *
-   * params.loanId = "5000152687"
-   */
   const accountNo = params.loanId;
 
   if (!accountNo) {

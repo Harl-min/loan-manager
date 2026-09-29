@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 
 import Button from "@/components/ui/Button";
@@ -20,9 +20,14 @@ type StatusDialogState = {
 function VerifyEmailForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const email = params.get("email") ?? "";
+  const pathname = usePathname();
 
+  // Admin page = /verify-email-admin (no ?admin=1)
+  const isAdmin =
+    pathname.includes("verify-email-admin") ||
+    pathname.startsWith("/verify-email-admin");
 
+  const email = (params.get("email") ?? "").trim().toLowerCase();
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
   const [countdown, setCountdown] = useState(300);
@@ -158,6 +163,7 @@ function VerifyEmailForm() {
           email,
           otp_code: code,
           purpose: "registration",
+          isAdmin, // true on /verify-email-admin, false on /verify-email
         }),
       });
 
@@ -181,7 +187,9 @@ function VerifyEmailForm() {
         open: true,
         type: "success",
         title: "Email verified",
-        message: "Your email has been verified successfully. You can now log in.",
+        message: isAdmin
+          ? "Your admin account has been verified. You can now sign in."
+          : "Your email has been verified successfully. You can now log in.",
         buttonText: "Continue to Login",
         redirectToLogin: true,
       });
@@ -212,7 +220,7 @@ function VerifyEmailForm() {
     }));
 
     if (shouldGoToLogin) {
-      router.push( "/login");
+      router.push( "/login?admin=1");
     }
   }
 
@@ -225,7 +233,7 @@ function VerifyEmailForm() {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/auth/otp/resend", {
+      const response = await fetch("/api/auth/otp/admin-resend", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

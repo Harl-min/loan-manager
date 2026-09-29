@@ -214,7 +214,7 @@ function VerifyEmailForm() {
     setLoading(true);
     try {
       // Keep resend off the NextAuth catch-all
-      const endpoint = isAdmin ? "/api/auth/otp/resend" : "/api/auth/otp/resend";
+      const endpoint = isAdmin ? "/api/auth/otp/admin-resend" : "/api/auth/otp/resend";
 
       const response = await fetch(endpoint, {
         method: "POST",

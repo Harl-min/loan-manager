@@ -16,6 +16,7 @@ export const AUTH_ENDPOINTS = {
   generateOtp: "/api/v1/otp/generate",
   verifyGenericOtp: "/api/v1/otp/verify",
   resendOtp: "/api/v1/otp/resend",
+  adminresendOtp: "/api/v1/admin/resend-otp",
   validateOtp: "/api/v1/otp/validate",
   checkVerification: (email: string) =>
     `/api/v1/otp/check-verification/${encodeURIComponent(email)}`,
@@ -135,7 +136,7 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, otp_code: otp, purpose }),
     }),
-      verifyAdminRegistrationOtp: (email: string, otp: string, purpose: string) =>
+  verifyAdminRegistrationOtp: (email: string, otp: string, purpose: string) =>
     remoteAuth(AUTH_ENDPOINTS.adminVerifyOtp, {
       method: "POST",
       body: JSON.stringify({ email, otp_code: otp, purpose }),
@@ -155,7 +156,7 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, otp_code: otp, purpose }),
     }),
-    adminVerifyLoginOtp: (email: string, otp: string) =>
+  adminVerifyLoginOtp: (email: string, otp: string) =>
     remoteAuth(AUTH_ENDPOINTS.adminVerifyLoginOtp, {
       method: "POST",
       body: JSON.stringify({ email, otp_code: otp, purpose: "login" }),
@@ -185,6 +186,11 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, purpose }),
     }),
+  adminresendOtp: (email: string, purpose: string) =>
+    remoteAuth(AUTH_ENDPOINTS.adminresendOtp, {
+      method: "POST",
+      body: JSON.stringify({ email, purpose }),
+    }),
   validateOtp: (body: unknown) =>
     remoteAuth(AUTH_ENDPOINTS.validateOtp, {
       method: "POST",
@@ -211,19 +217,14 @@ export function toRemoteSession(response: unknown, fallbackEmail: string) {
   const tokens = unwrap(data.tokens ?? data.token ?? data);
   const user = unwrap(data.user ?? data.profile ?? data);
 
-  const accessToken = text(tokens, [
-    "access_token",
-    "accessToken",
-    "token",
-  ]);
+  const accessToken = text(tokens, ["access_token", "accessToken", "token"]);
 
   if (!accessToken) {
     console.error("No access token found in auth response:", response);
     return null;
   }
 
-  const email =
-    text(user, ["email"]) ?? text(data, ["email"]) ?? fallbackEmail;
+  const email = text(user, ["email"]) ?? text(data, ["email"]) ?? fallbackEmail;
 
   const id =
     text(user, ["id", "user_id", "userId"]) ??
@@ -234,8 +235,7 @@ export function toRemoteSession(response: unknown, fallbackEmail: string) {
     text(user, ["full_name", "fullName", "name"]) ??
     text(data, ["full_name", "fullName", "name"]);
 
-  const name =
-    fullName && fullName !== email ? fullName : fullName ?? email;
+  const name = fullName && fullName !== email ? fullName : (fullName ?? email);
 
   const rawRole = (
     text(user, ["role", "userRole"]) ??
@@ -245,9 +245,7 @@ export function toRemoteSession(response: unknown, fallbackEmail: string) {
 
   // admin | super_admin | ADMIN → session role "admin"
   const role: "admin" | "BORROWER" | undefined =
-    rawRole === "ADMIN" ||
-    rawRole === "SUPER_ADMIN" ||
-    rawRole === "SUPERADMIN"
+    rawRole === "ADMIN" || rawRole === "SUPER_ADMIN" || rawRole === "SUPERADMIN"
       ? "admin"
       : rawRole === "BORROWER"
         ? "BORROWER"

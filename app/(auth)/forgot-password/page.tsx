@@ -101,7 +101,7 @@ function ForgotPasswordForm() {
 
       // Admin vs customer set-password path if you split them later
       const setPasswordBase = isAdminMode
-        ? "/admin/set-password"
+        ? "/admin-set-password"
         : "/customer/set-password";
 
       const redirectPath = token
