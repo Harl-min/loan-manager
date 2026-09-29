@@ -11,9 +11,9 @@
 //  - Events are queued in memory and flushed in batches (every 4s, when 10
 //    events accumulate, or on page unload via sendBeacon) to avoid firing a
 //    network request per click.
-//  - The server endpoint (app/api/events/route.ts) persists rows to the DB
-//    via Prisma. If NEXT_PUBLIC_API_URL points at an external server instead,
-//    events are posted there — the queueing logic doesn't change.
+//  - The server endpoint (app/api/events/route.ts) maps each event to
+//    POST /api/v1/auth/audit-log { action, page, when }. The backend fills
+//    email (from token), user_name, and ip_address.
 // ---------------------------------------------------------------------------
 
 export type TrackedEvent = {
@@ -43,14 +43,17 @@ let queue: TrackedEvent[] = [];
 let timer: ReturnType<typeof setInterval> | null = null;
 
 function endpoint() {
-  const base = process.env.NEXT_PUBLIC_API_URL ?? "/api";
-  return `${base}/events`;
+  // Always hit the Next.js proxy so the Bearer token is attached server-side
+  return "/api/events";
 }
 
 async function flush(useBeacon = false) {
   if (queue.length === 0) return;
   const batch = queue.splice(0, queue.length);
-  const payload = JSON.stringify({ sessionId: getSessionId(), events: batch });
+  const payload = JSON.stringify({
+    sessionId: getSessionId(),
+    events: batch,
+  });
 
   try {
     if (useBeacon && navigator.sendBeacon) {
@@ -91,7 +94,7 @@ export function resolveTrackedTarget(target: EventTarget | null): {
 } | null {
   if (!(target instanceof Element)) return null;
   const el = target.closest<HTMLElement>(
-    "[data-track], button, a, [role='button'], input[type='submit'], input[type='button']"
+    "[data-track], button, a, [role='button'], input[type='submit'], input[type='button']",
   );
   if (!el) return null;
 

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
-const ACCT_URL = process.env.NEXT_DATA_AUTH_URL; 
+const ACCT_URL = process.env.NEXT_DATA_AUTH_URL;
 
 const eventSchema = z.object({
   label: z.string().max(200),
@@ -34,12 +34,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const session = await getServerSession(authOptions);
-  const accessToken =
-    (session as any)?.accessToken ||
-    (session as any)?.access_token ||
-    undefined;
-
   if (!ACCT_URL) {
     return NextResponse.json(
       { error: "Auth service URL is not configured." },
@@ -47,45 +41,68 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const session = await getServerSession(authOptions);
+  const accessToken =
+    (session as { accessToken?: string; access_token?: string } | null)
+      ?.accessToken ||
+    (session as { accessToken?: string; access_token?: string } | null)
+      ?.access_token;
+
+  // Backend derives email / user_name / ip from the Bearer token + request.
+  // We only forward action, page, when (one call per event).
+  const base = ACCT_URL.replace(/\/$/, "");
+  const auditUrl = `${base}/api/v1/auth/audit-log`;
+
+  const results: { ok: boolean; status: number; body?: unknown }[] = [];
+
   try {
-    const response = await fetch(
-      `${ACCT_URL.replace(/\/$/, "")}/api/v1/admin/user-activity`,
-      {
+    for (const event of parsed.data.events) {
+      const body = {
+        action: event.label,
+        page: event.path,
+        when: event.timestamp, // ISO string from the client
+      };
+
+      const response = await fetch(auditUrl, {
         method: "POST",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          ...(accessToken
-            ? { Authorization: `Bearer ${accessToken}` }
-            : {}),
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
-        body: JSON.stringify({
-          sessionId: parsed.data.sessionId,
-          events: parsed.data.events,
-          // optional context if the API accepts it
-          userId: (session?.user as any)?.id,
-          email: session?.user?.email ?? undefined,
-        }),
+        body: JSON.stringify(body),
         cache: "no-store",
-      },
-    );
+      });
 
-    const data = await response.json().catch(() => null);
+      const data = await response.json().catch(() => null);
 
-    if (!response.ok) {
-      return NextResponse.json(
-        {
-          error:
-            data?.detail ||
-            data?.message ||
-            data?.error ||
-            "Failed to record activity",
-        },
-        { status: response.status },
-      );
+      results.push({
+        ok: response.ok,
+        status: response.status,
+        body: data,
+      });
+
+      // Fail the whole batch on first non-2xx so the client can retry if needed
+      if (!response.ok) {
+        return NextResponse.json(
+          {
+            error:
+              (data as { detail?: string; message?: string; error?: string })
+                ?.detail ||
+              (data as { message?: string })?.message ||
+              (data as { error?: string })?.error ||
+              "Failed to record activity",
+            results,
+          },
+          { status: response.status },
+        );
+      }
     }
 
-    return NextResponse.json(data ?? { ok: true }, { status: 201 });
+    return NextResponse.json(
+      { ok: true, recorded: results.length },
+      { status: 201 },
+    );
   } catch (error) {
     console.error("user-activity proxy error:", error);
     return NextResponse.json(
@@ -93,4 +110,4 @@ export async function POST(req: NextRequest) {
       { status: 502 },
     );
   }
-} 
+}

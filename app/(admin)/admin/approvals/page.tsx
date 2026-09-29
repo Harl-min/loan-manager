@@ -1065,7 +1065,7 @@ function ActivateUserModal({
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <div className="text-xs text-muted">User name</div>
+                    <div className="text-xs text-muted">Account name</div>
                     <div className="mt-1 text-sm font-medium text-foreground">
                       {association.customer_name || "—"}
                     </div>
